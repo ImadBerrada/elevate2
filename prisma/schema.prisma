@@ -115,7 +115,7 @@ model Employer {
   id           String   @id @default(cuid())
   picture      String?
   category     String
-  nameArabic   String
+  nameArabic   String?
   nameEnglish  String
   description  String?
   industry     String?
