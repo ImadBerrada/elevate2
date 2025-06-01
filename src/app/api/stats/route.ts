@@ -1,27 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
 
-// GET /api/stats - Get dashboard statistics (demo mode - no auth required)
-export async function GET(request: NextRequest) {
+// GET /api/stats - Get dashboard statistics for the authenticated user
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
-    // For demo purposes, we'll use a default user ID or create one if needed
-    let userId = 'demo-user-id';
-    
-    // Ensure demo user exists
-    const demoUser = await prisma.user.upsert({
-      where: { id: userId },
-      update: {},
-      create: {
-        id: userId,
-        email: 'demo@elevate.com',
-        password: 'demo-password',
-        firstName: 'Demo',
-        lastName: 'User',
-        role: 'USER',
-      },
-    });
-    
-    userId = demoUser.id;
+    const userId = request.user!.userId;
     
     // Get current date and date ranges
     const now = new Date();
@@ -198,4 +182,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}); 

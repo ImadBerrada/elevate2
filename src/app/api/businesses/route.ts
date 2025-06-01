@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
 import { businessSchema } from '@/lib/validations';
 
-// GET /api/businesses - Get businesses (demo mode - no auth required)
-export async function GET(request: NextRequest) {
+// GET /api/businesses - Get all businesses for the authenticated user
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
-    // For demo purposes, use default user ID
-    const userId = 'demo-user-id';
-    
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
     const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || '';
+    const skip = (page - 1) * limit;
 
-    const where = {
-      userId,
+    const whereClause = {
+      userId: request.user!.userId,
       ...(search && {
         OR: [
           { name: { contains: search, mode: 'insensitive' as const } },
@@ -21,15 +22,29 @@ export async function GET(request: NextRequest) {
           { location: { contains: search, mode: 'insensitive' as const } },
         ],
       }),
+      ...(status && { status: status as any }),
     };
 
     const businesses = await prisma.business.findMany({
-      where,
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
+      skip,
       take: limit,
     });
 
-    return NextResponse.json(businesses);
+    const total = await prisma.business.count({
+      where: whereClause,
+    });
+
+    return NextResponse.json({
+      businesses,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
     console.error('Get businesses error:', error);
     return NextResponse.json(
@@ -37,31 +52,38 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
-// POST /api/businesses - Create business (demo mode - no auth required)
-export async function POST(request: NextRequest) {
+// POST /api/businesses - Create a new business
+export const POST = withAuth(async (request: AuthenticatedRequest) => {
   try {
-    // For demo purposes, use default user ID
-    const userId = 'demo-user-id';
-    
     const body = await request.json();
+    
+    // Validate input
     const validatedData = businessSchema.parse(body);
-
+    
+    // Create business
     const business = await prisma.business.create({
       data: {
         ...validatedData,
-        lastInteraction: validatedData.lastInteraction ? new Date(validatedData.lastInteraction) : null,
-        userId,
+        userId: request.user!.userId,
       },
     });
-
+    
     return NextResponse.json(business, { status: 201 });
   } catch (error) {
     console.error('Create business error:', error);
+    
+    if (error instanceof Error && error.name === 'ZodError') {
+      return NextResponse.json(
+        { error: 'Invalid input data' },
+        { status: 400 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Failed to create business' },
       { status: 500 }
     );
   }
-} 
+}); 
