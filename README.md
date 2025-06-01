@@ -1,168 +1,226 @@
-# 🏢 CompanyHub - Premium Company Management Dashboard
+# 🚀 ELEVATE Investment Group Dashboard
 
-A modern, high-tech dashboard for managing companies built with Next.js 14, TypeScript, and a beautiful light blue and white theme.
+A premium, high-tech company dashboard built with Next.js 14, TypeScript, and modern web technologies. Features a sophisticated Business Network management system with glassmorphism design and premium animations.
 
-![Dashboard Preview](https://img.shields.io/badge/Status-Ready%20for%20Production-brightgreen)
-![Next.js](https://img.shields.io/badge/Next.js-14-black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4-38bdf8)
+![ELEVATE Dashboard](https://img.shields.io/badge/Next.js-15.3.3-black?style=for-the-badge&logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=for-the-badge&logo=typescript)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.0-38B2AC?style=for-the-badge&logo=tailwind-css)
+![Prisma](https://img.shields.io/badge/Prisma-5.0-2D3748?style=for-the-badge&logo=prisma)
 
 ## ✨ Features
 
-- **🎨 Modern UI/UX Design** - Premium light blue and white theme with smooth animations
-- **📱 Fully Responsive** - Works perfectly on desktop, tablet, and mobile devices
-- **⚡ High Performance** - Built with Next.js 14 App Router for optimal performance
-- **🎭 Smooth Animations** - Powered by Framer Motion for delightful user interactions
-- **🧩 Component Library** - Built with shadcn/ui for consistent, accessible components
-- **🔍 Advanced Search** - Real-time company search functionality
-- **📊 Analytics Dashboard** - Beautiful charts and statistics overview
-- **🔔 Real-time Notifications** - Stay updated with latest activities
-- **👥 User Management** - Comprehensive user and company management
-- **🌙 Dark Mode Ready** - Built-in dark mode support
+### 🏢 Business Network Management
+- **Dashboard**: Real-time network analytics and statistics
+- **Activity**: Activity feed with points system and engagement tracking
+- **Contacts**: Professional contact directory with employer relationships
+- **Business**: Partnership management and deal pipeline
+- **Employers**: Employer relationship management with bilingual support
 
-## 🛠 Tech Stack
+### 🎨 Design & UI
+- **Glassmorphism Design**: Modern glass-like effects with OKLCH color space
+- **Premium Animations**: Smooth Framer Motion animations throughout
+- **Responsive Layout**: Mobile-first design with collapsible sidebar
+- **Light Blue Theme**: Professional light blue and white color scheme
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Next.js** | 14 | React framework with App Router |
-| **TypeScript** | 5 | Type-safe development |
-| **Tailwind CSS** | 4 | Utility-first CSS framework |
-| **shadcn/ui** | Latest | Modern component library |
-| **Framer Motion** | 11 | Animation library |
-| **Lucide React** | Latest | Beautiful icons |
-| **React Hook Form** | Latest | Form management |
-| **Resend** | Latest | Email service integration |
-| **Geist Font** | Latest | Modern typography |
+### 🔧 Technical Features
+- **Full-Stack**: Complete frontend and backend implementation
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: JWT-based auth system with bcrypt
+- **Real-time Updates**: Live data fetching and updates
+- **Form Validation**: Zod schema validation
+- **Search & Filtering**: Advanced search capabilities
+- **File Upload**: Image upload functionality
 
-## 🚀 Quick Start
+## 🛠️ Tech Stack
+
+### Frontend
+- **Next.js 14** - React framework with App Router
+- **TypeScript** - Type-safe development
+- **Tailwind CSS v4** - Utility-first CSS framework
+- **shadcn/ui** - Modern UI components
+- **Framer Motion** - Animation library
+- **Lucide React** - Icon library
+- **Recharts** - Chart and data visualization
+
+### Backend
+- **Next.js API Routes** - Serverless API endpoints
+- **Prisma ORM** - Database toolkit
+- **PostgreSQL** - Database (Neon)
+- **JWT** - Authentication tokens
+- **bcryptjs** - Password hashing
+- **Zod** - Schema validation
+
+## 🚀 Getting Started
 
 ### Prerequisites
-
 - Node.js 18+ 
-- npm, yarn, or pnpm
+- npm or yarn
+- PostgreSQL database (Neon recommended)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
-   cd company-dashboard
+   git clone https://github.com/ImadBerrada/Elevate.git
+   cd Elevate
    ```
 
 2. **Install dependencies**
    ```bash
    npm install
-   # or
-   yarn install
-   # or
-   pnpm install
    ```
 
-3. **Run the development server**
+3. **Environment Setup**
+   Create a `.env` file in the root directory:
+   ```env
+   # Database
+   DATABASE_URL="your_neon_database_url"
+   
+   # JWT Secret
+   JWT_SECRET="your_jwt_secret_key"
+   
+   # Next.js
+   NEXTAUTH_SECRET="your_nextauth_secret"
+   ```
+
+4. **Database Setup**
+   ```bash
+   # Generate Prisma client
+   npx prisma generate
+   
+   # Push database schema
+   npx prisma db push
+   ```
+
+5. **Run the development server**
    ```bash
    npm run dev
-   # or
-   yarn dev
-   # or
-   pnpm dev
    ```
 
-4. **Open your browser**
+6. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000)
-
-## 📜 Available Scripts
-
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
-| `npm run type-check` | Run TypeScript type checking |
-
-## 🎨 Design System
-
-### Color Palette
-
-The dashboard uses a sophisticated light blue and white theme:
-
-- **Primary**: Light blue (`oklch(0.55 0.15 220)`)
-- **Background**: Pure white with blue tint (`oklch(0.99 0.005 220)`)
-- **Cards**: Pure white (`oklch(1 0 0)`)
-- **Accents**: Soft light blue (`oklch(0.92 0.03 220)`)
-- **Text**: Dark blue-gray (`oklch(0.15 0.02 220)`)
-
-### Typography
-
-- **Primary Font**: Geist Sans - Modern, clean, and highly readable
-- **Monospace Font**: Geist Mono - Perfect for code and data display
-
-### Components
-
-All components are built with shadcn/ui and customized for the light blue theme:
-
-- Cards with subtle gradients and hover effects
-- Smooth animations and transitions
-- Consistent spacing and typography
-- Accessible design patterns
 
 ## 📁 Project Structure
 
 ```
-company-dashboard/
-├── src/
-│   ├── app/
-│   │   ├── globals.css          # Global styles and theme
-│   │   ├── layout.tsx           # Root layout with fonts
-│   │   └── page.tsx             # Main dashboard page
-│   ├── components/
-│   │   └── ui/                  # shadcn/ui components
-│   ├── lib/
-│   │   └── utils.ts             # Utility functions
-│   └── hooks/                   # Custom React hooks
-├── public/                      # Static assets
-├── components.json              # shadcn/ui configuration
-├── tailwind.config.js          # Tailwind CSS configuration
-├── tsconfig.json               # TypeScript configuration
-└── package.json                # Dependencies and scripts
+src/
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   │   ├── auth/          # Authentication endpoints
+│   │   ├── activities/    # Activity management
+│   │   ├── contacts/      # Contact management
+│   │   ├── businesses/    # Business management
+│   │   ├── employers/     # Employer management
+│   │   └── stats/         # Statistics endpoint
+│   ├── elevate/           # Main dashboard pages
+│   │   └── business-network/  # Business Network section
+│   └── globals.css        # Global styles
+├── components/            # Reusable components
+│   ├── ui/               # shadcn/ui components
+│   └── ...               # Custom components
+├── lib/                  # Utility libraries
+│   ├── api-client.ts     # API client
+│   ├── auth.ts           # Authentication utilities
+│   ├── validations.ts    # Zod schemas
+│   └── utils.ts          # General utilities
+└── prisma/               # Database schema
+    └── schema.prisma     # Prisma schema
 ```
 
-## 🔧 Configuration
+## 🔐 Authentication
 
-### Environment Variables
+The application includes a complete authentication system:
 
-Create a `.env.local` file for environment-specific variables:
+- **Registration**: Create new user accounts
+- **Login**: JWT-based authentication
+- **Protected Routes**: Middleware protection for API routes
+- **Password Security**: bcrypt hashing
 
-```env
-# Add your environment variables here
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-RESEND_API_KEY=your_resend_api_key
-```
+### API Endpoints
 
-### Tailwind CSS
+#### Authentication
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
 
-The project uses Tailwind CSS v4 with custom theme configuration. The light blue and white theme is defined in `src/app/globals.css`.
+#### Business Network
+- `GET/POST /api/activities` - Activity management
+- `GET/POST /api/contacts` - Contact management
+- `GET/POST /api/businesses` - Business management
+- `GET/POST /api/employers` - Employer management
+- `GET /api/stats` - Dashboard statistics
 
-### TypeScript
+## 🎯 Business Network Features
 
-Strict TypeScript configuration is enabled for better code quality and developer experience.
+### Dashboard
+- Network overview with real-time statistics
+- Recent connections and meetings
+- Network analytics and growth metrics
+
+### Activity Management
+- Create activities with point values
+- Activity feed with timestamps
+- Points system for different activity types
+- Search and filtering capabilities
+
+### Contact Management
+- Professional contact directory
+- Employer relationship linking
+- Star rating system (1-3 stars)
+- Comprehensive contact information
+
+### Business Management
+- Partnership tracking
+- Deal pipeline management
+- Company profiles and ratings
+- Status indicators
+
+### Employer Management
+- Bilingual support (Arabic/English)
+- Industry categorization
+- Partnership status tracking
+- Creation date tracking
+
+## 🎨 Design System
+
+### Colors (OKLCH)
+- **Primary**: Light blue variations
+- **Background**: White with glass effects
+- **Accents**: Refined borders and shadows
+
+### Typography
+- **Font**: Inter (system font fallback)
+- **Weights**: 400, 500, 600, 700
+
+### Components
+- **Glassmorphism**: Backdrop blur effects
+- **Animations**: Smooth transitions and micro-interactions
+- **Responsive**: Mobile-first approach
+
+## 📊 Database Schema
+
+The application uses Prisma with the following main models:
+
+- **User**: Authentication and user management
+- **Activity**: Business activities with points
+- **Contact**: Professional contacts with employer links
+- **Business**: Business partnerships and deals
+- **Employer**: Employer information with bilingual support
 
 ## 🚀 Deployment
 
 ### Vercel (Recommended)
+1. Connect your GitHub repository to Vercel
+2. Add environment variables in Vercel dashboard
+3. Deploy automatically on push to main branch
 
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Deploy with one click
+### Manual Deployment
+```bash
+# Build the application
+npm run build
 
-### Other Platforms
-
-The project can be deployed to any platform that supports Next.js:
-
-- Netlify
-- AWS Amplify
-- Railway
-- DigitalOcean App Platform
+# Start production server
+npm start
+```
 
 ## 🤝 Contributing
 
@@ -176,14 +234,20 @@ The project can be deployed to any platform that supports Next.js:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## 👨‍💻 Author
+
+**Imad Berrada**
+- Email: berimad02@gmail.com
+- GitHub: [@ImadBerrada](https://github.com/ImadBerrada)
+
 ## 🙏 Acknowledgments
 
-- [Next.js](https://nextjs.org/) - The React framework for production
-- [shadcn/ui](https://ui.shadcn.com/) - Beautiful and accessible components
+- [Next.js](https://nextjs.org/) - The React framework
 - [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
+- [shadcn/ui](https://ui.shadcn.com/) - Beautiful UI components
 - [Framer Motion](https://www.framer.com/motion/) - Animation library
-- [Lucide](https://lucide.dev/) - Beautiful icon library
+- [Prisma](https://www.prisma.io/) - Database toolkit
 
 ---
 
-**Built with ❤️ for modern company management**
+**ELEVATE Investment Group Dashboard** - Elevating business networks to new heights 🚀
