@@ -1,36 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
 import { activitySchema } from '@/lib/validations';
 
-// GET /api/activities - Get all activities for the authenticated user
-export const GET = withAuth(async (request: AuthenticatedRequest) => {
+// GET /api/activities - Get activities (demo mode - no auth required)
+export async function GET(request: NextRequest) {
   try {
+    // For demo purposes, use default user ID
+    const userId = 'demo-user-id';
+    
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const skip = (page - 1) * limit;
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const search = searchParams.get('search') || '';
+
+    const where = {
+      userId,
+      ...(search && {
+        OR: [
+          { title: { contains: search, mode: 'insensitive' as const } },
+          { notes: { contains: search, mode: 'insensitive' as const } },
+        ],
+      }),
+    };
 
     const activities = await prisma.activity.findMany({
-      where: { userId: request.user!.userId },
+      where,
       orderBy: { createdAt: 'desc' },
-      skip,
       take: limit,
-    });
-
-    const total = await prisma.activity.count({
-      where: { userId: request.user!.userId },
-    });
-
-    return NextResponse.json({
-      activities,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        date: true,
+        notes: true,
+        points: true,
+        createdAt: true,
       },
     });
+
+    return NextResponse.json(activities);
   } catch (error) {
     console.error('Get activities error:', error);
     return NextResponse.json(
@@ -38,16 +45,17 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       { status: 500 }
     );
   }
-});
+}
 
-// POST /api/activities - Create a new activity
-export const POST = withAuth(async (request: AuthenticatedRequest) => {
+// POST /api/activities - Create activity (demo mode - no auth required)
+export async function POST(request: NextRequest) {
   try {
+    // For demo purposes, use default user ID
+    const userId = 'demo-user-id';
+    
     const body = await request.json();
-    
-    // Validate input
     const validatedData = activitySchema.parse(body);
-    
+
     // Calculate points based on activity type
     const pointsMap = {
       MEETING: 10,
@@ -61,31 +69,22 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
     };
     
     const points = pointsMap[validatedData.type] || 0;
-    
-    // Create activity
+
     const activity = await prisma.activity.create({
       data: {
         ...validatedData,
         date: new Date(validatedData.date),
         points,
-        userId: request.user!.userId,
+        userId,
       },
     });
-    
+
     return NextResponse.json(activity, { status: 201 });
   } catch (error) {
     console.error('Create activity error:', error);
-    
-    if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Invalid input data' },
-        { status: 400 }
-      );
-    }
-    
     return NextResponse.json(
       { error: 'Failed to create activity' },
       { status: 500 }
     );
   }
-}); 
+} 

@@ -1,50 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
 import { employerSchema } from '@/lib/validations';
 
-// GET /api/employers - Get all employers for the authenticated user
-export const GET = withAuth(async (request: AuthenticatedRequest) => {
+// GET /api/employers - Get employers (demo mode - no auth required)
+export async function GET(request: NextRequest) {
   try {
+    // For demo purposes, use default user ID
+    const userId = 'demo-user-id';
+    
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const limit = parseInt(searchParams.get('limit') || '50');
     const search = searchParams.get('search') || '';
-    const category = searchParams.get('category') || '';
-    const skip = (page - 1) * limit;
 
-    const whereClause = {
-      userId: request.user!.userId,
+    const where = {
+      userId,
       ...(search && {
         OR: [
           { nameEnglish: { contains: search, mode: 'insensitive' as const } },
           { nameArabic: { contains: search, mode: 'insensitive' as const } },
-          { industry: { contains: search, mode: 'insensitive' as const } },
+          { category: { contains: search, mode: 'insensitive' as const } },
         ],
       }),
-      ...(category && { category }),
     };
 
     const employers = await prisma.employer.findMany({
-      where: whereClause,
+      where,
       orderBy: { createdAt: 'desc' },
-      skip,
       take: limit,
     });
 
-    const total = await prisma.employer.count({
-      where: whereClause,
-    });
-
-    return NextResponse.json({
-      employers,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    });
+    return NextResponse.json(employers);
   } catch (error) {
     console.error('Get employers error:', error);
     return NextResponse.json(
@@ -52,38 +37,30 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       { status: 500 }
     );
   }
-});
+}
 
-// POST /api/employers - Create a new employer
-export const POST = withAuth(async (request: AuthenticatedRequest) => {
+// POST /api/employers - Create employer (demo mode - no auth required)
+export async function POST(request: NextRequest) {
   try {
+    // For demo purposes, use default user ID
+    const userId = 'demo-user-id';
+    
     const body = await request.json();
-    
-    // Validate input
     const validatedData = employerSchema.parse(body);
-    
-    // Create employer
+
     const employer = await prisma.employer.create({
       data: {
         ...validatedData,
-        userId: request.user!.userId,
+        userId,
       },
     });
-    
+
     return NextResponse.json(employer, { status: 201 });
   } catch (error) {
     console.error('Create employer error:', error);
-    
-    if (error instanceof Error && error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Invalid input data' },
-        { status: 400 }
-      );
-    }
-    
     return NextResponse.json(
       { error: 'Failed to create employer' },
       { status: 500 }
     );
   }
-}); 
+} 
