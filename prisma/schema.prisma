@@ -1,0 +1,200 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and user management
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String?
+  lastName  String?
+  avatar    String?
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  activities Activity[]
+  contacts   Contact[]
+  businesses Business[]
+  employers  Employer[]
+
+  @@map("users")
+}
+
+// Activity model for tracking business network activities
+model Activity {
+  id          String       @id @default(cuid())
+  title       String
+  type        ActivityType
+  date        DateTime
+  notes       String?
+  picture     String?
+  points      Int
+  userId      String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("activities")
+}
+
+// Contact model for managing professional contacts
+model Contact {
+  id            String        @id @default(cuid())
+  picture       String?
+  employer      String?
+  firstName     String
+  lastName      String
+  gender        Gender?
+  dateOfBirth   DateTime?
+  maritalStatus MaritalStatus?
+  relation      RelationType?
+  category      String?
+  rating        Int?          @default(1) // 1-3 rating
+  email         String
+  phone         String
+  country       String?
+  city          String?
+  area          String?
+  address       String?
+  userId        String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("contacts")
+}
+
+// Business model for managing business partnerships
+model Business {
+  id             String            @id @default(cuid())
+  picture        String?
+  name           String
+  description    String?
+  industry       String?
+  size           String?
+  location       String?
+  revenue        String?
+  founded        String?
+  status         BusinessStatus    @default(PROSPECT)
+  partnership    PartnershipType?
+  dealValue      String?
+  lastInteraction DateTime?
+  rating         Int?              @default(1) // 1-5 rating
+  tags           String[]
+  userId         String
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("businesses")
+}
+
+// Employer model for managing employer partnerships
+model Employer {
+  id           String   @id @default(cuid())
+  picture      String?
+  category     String
+  nameArabic   String
+  nameEnglish  String
+  description  String?
+  industry     String?
+  size         String?
+  location     String?
+  founded      String?
+  status       EmployerStatus @default(NEW)
+  partnership  String?
+  openPositions Int?     @default(0)
+  placementRate Float?   @default(0)
+  avgSalary    String?
+  lastPlacement DateTime?
+  rating       Int?     @default(1) // 1-5 rating
+  benefits     String[]
+  tags         String[]
+  userId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("employers")
+}
+
+// Enums
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ActivityType {
+  MEETING
+  CALL
+  EMAIL
+  NETWORKING
+  PRESENTATION
+  NEGOTIATION
+  PARTNERSHIP
+  DEAL
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+}
+
+enum RelationType {
+  FRIEND
+  RELATIVE
+  CONTACT
+}
+
+enum BusinessStatus {
+  PROSPECT
+  PARTNER
+  NEGOTIATING
+  INACTIVE
+}
+
+enum PartnershipType {
+  STRATEGIC_ALLIANCE
+  INVESTMENT_OPPORTUNITY
+  CO_INVESTMENT
+  JOINT_VENTURE
+  STRATEGIC_INVESTMENT
+  SERVICE_PARTNERSHIP
+}
+
+enum EmployerStatus {
+  NEW
+  ACTIVE
+  PREMIUM
+  INACTIVE
+}
