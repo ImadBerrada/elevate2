@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
 import { employerSchema } from '@/lib/validations';
 
+// Force dynamic rendering to prevent caching issues
+export const dynamic = 'force-dynamic';
+
 // GET /api/employers - Get all employers for the authenticated user
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {

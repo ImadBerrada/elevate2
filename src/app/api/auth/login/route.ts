@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { prisma } from '@/lib/prisma';
 import { verifyPassword, generateToken } from '@/lib/auth';
 import { loginSchema } from '@/lib/validations';
+
+// Force dynamic rendering to prevent caching issues
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {

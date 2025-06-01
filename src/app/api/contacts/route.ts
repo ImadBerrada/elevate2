@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
 import { contactSchema } from '@/lib/validations';
 
+// Force dynamic rendering to prevent caching issues
+export const dynamic = 'force-dynamic';
+
 // GET /api/contacts - Get all contacts for the authenticated user
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {

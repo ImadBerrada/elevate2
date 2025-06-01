@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
 
+// Force dynamic rendering to prevent caching issues
+export const dynamic = 'force-dynamic';
+
 // GET /api/stats - Get dashboard statistics for the authenticated user
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
