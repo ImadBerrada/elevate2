@@ -2,532 +2,721 @@
 
 import { motion } from "framer-motion";
 import { 
-  Truck, 
-  MapPin, 
-  DollarSign,
-  TrendingUp,
-  Clock,
-  Calculator,
   Search,
   Filter,
-  Plus,
+  Truck,
   Eye,
   Edit,
-  Settings,
-  BarChart3
+  Trash2,
+  Plus,
+  RefreshCw,
+  Download,
+  MapPin,
+  DollarSign,
+  Route,
+  AlertCircle,
+  Calculator,
+  Map,
+  Navigation,
+  Clock
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sidebar } from "@/components/sidebar";
+import { Header } from "@/components/header";
+import { AddDeliveryChargeModal } from "@/components/modals/add-delivery-charge-modal";
+import { useSidebar } from "@/contexts/sidebar-context";
+import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 
 const fadeInUp = {
-  initial: { opacity: 0, y: 30 },
+  initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.6, ease: "easeOut" }
+  transition: { duration: 0.5, ease: [0.4, 0, 0.2, 1] }
 };
 
 const staggerContainer = {
   animate: {
     transition: {
-      staggerChildren: 0.15
+      staggerChildren: 0.1
     }
   }
 };
 
-export default function DeliveryCharges() {
-  const deliveryZones = [
-    {
-      id: "ZONE-001",
-      name: "Downtown Dubai",
-      baseRate: "$5.00",
-      perKmRate: "$0.80",
-      avgDeliveryTime: "25 min",
-      totalDeliveries: 1240,
-      revenue: "$8,450",
-      status: "active"
-    },
-    {
-      id: "ZONE-002",
-      name: "Dubai Marina",
-      baseRate: "$6.00",
-      perKmRate: "$0.90",
-      avgDeliveryTime: "30 min",
-      totalDeliveries: 890,
-      revenue: "$6,780",
-      status: "active"
-    },
-    {
-      id: "ZONE-003",
-      name: "Business Bay",
-      baseRate: "$5.50",
-      perKmRate: "$0.85",
-      avgDeliveryTime: "28 min",
-      totalDeliveries: 1050,
-      revenue: "$7,200",
-      status: "active"
-    },
-    {
-      id: "ZONE-004",
-      name: "Jumeirah",
-      baseRate: "$7.00",
-      perKmRate: "$1.00",
-      avgDeliveryTime: "35 min",
-      totalDeliveries: 650,
-      revenue: "$5,890",
-      status: "active"
-    },
-    {
-      id: "ZONE-005",
-      name: "Dubai Hills",
-      baseRate: "$8.00",
-      perKmRate: "$1.20",
-      avgDeliveryTime: "40 min",
-      totalDeliveries: 420,
-      revenue: "$4,320",
-      status: "limited"
-    }
+interface DeliveryCharge {
+  id: string;
+  zone: string;
+  area: string;
+  baseCharge: number;
+  perKmCharge: number;
+  minimumCharge: number;
+  maximumCharge?: number;
+  estimatedTime: number; // in minutes
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export default function DeliveryChargesPage() {
+  const { isOpen, isMobile, isTablet, isDesktop } = useSidebar();
+  const [deliveryCharges, setDeliveryCharges] = useState<DeliveryCharge[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [marahCompanyId, setMarahCompanyId] = useState<string | null>(null);
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [zoneFilter, setZoneFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const [showAddDeliveryCharge, setShowAddDeliveryCharge] = useState(false);
+
+  const statusOptions = [
+    { value: "all", label: "All Zones" },
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
   ];
 
-  const pricingModels = [
-    {
-      name: "Standard Delivery",
-      description: "Regular delivery service",
-      baseRate: "$5.00",
-      timeMultiplier: "1.0x",
-      distanceRate: "$0.80/km",
-      popularity: 65
-    },
-    {
-      name: "Express Delivery",
-      description: "Fast delivery within 20 minutes",
-      baseRate: "$8.00",
-      timeMultiplier: "1.5x",
-      distanceRate: "$1.20/km",
-      popularity: 25
-    },
-    {
-      name: "Scheduled Delivery",
-      description: "Delivery at specific time",
-      baseRate: "$6.00",
-      timeMultiplier: "1.2x",
-      distanceRate: "$0.90/km",
-      popularity: 10
-    }
-  ];
+  useEffect(() => {
+    fetchMarahCompany();
+  }, []);
 
-  const recentCharges = [
-    {
-      id: "CHG-001",
-      orderId: "ORD-12450",
-      customer: "Ahmed Al-Mansouri",
-      zone: "Downtown Dubai",
-      distance: "3.2 km",
-      deliveryType: "Express",
-      baseCharge: "$8.00",
-      distanceCharge: "$3.84",
-      totalCharge: "$11.84",
-      status: "completed"
-    },
-    {
-      id: "CHG-002",
-      orderId: "ORD-12451",
-      customer: "Sarah Johnson",
-      zone: "Dubai Marina",
-      distance: "2.8 km",
-      deliveryType: "Standard",
-      baseCharge: "$6.00",
-      distanceCharge: "$2.52",
-      totalCharge: "$8.52",
-      status: "completed"
-    },
-    {
-      id: "CHG-003",
-      orderId: "ORD-12452",
-      customer: "Maria Garcia",
-      zone: "Business Bay",
-      distance: "4.1 km",
-      deliveryType: "Scheduled",
-      baseCharge: "$6.00",
-      distanceCharge: "$3.49",
-      totalCharge: "$9.49",
-      status: "pending"
+  useEffect(() => {
+    if (marahCompanyId) {
+      fetchDeliveryCharges();
+      
+      // Set up real-time updates
+      const interval = setInterval(() => {
+        fetchDeliveryCharges();
+      }, 60000); // Refresh every minute
+      
+      return () => clearInterval(interval);
     }
-  ];
+  }, [marahCompanyId]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active": return "text-green-600";
-      case "limited": return "text-yellow-600";
-      case "inactive": return "text-red-600";
-      case "completed": return "text-green-600";
-      case "pending": return "text-yellow-600";
-      default: return "text-gray-600";
+  useEffect(() => {
+    if (marahCompanyId) {
+      fetchDeliveryCharges();
+    }
+  }, [searchTerm, zoneFilter, statusFilter]);
+
+  const fetchMarahCompany = async () => {
+    try {
+      const response = await fetch('/api/companies', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const marahCompany = data.companies.find((company: any) => 
+          company.name === 'MARAH Inflatable Games Rental'
+        );
+        
+        if (marahCompany) {
+          setMarahCompanyId(marahCompany.id);
+        } else {
+          setError('MARAH company not found. Please create it first from the Companies page.');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+      setError('Failed to fetch company information');
     }
   };
 
-  const getStatusBg = (status: string) => {
-    switch (status) {
-      case "active": return "bg-green-100 text-green-800";
-      case "limited": return "bg-yellow-100 text-yellow-800";
-      case "inactive": return "bg-red-100 text-red-800";
-      case "completed": return "bg-green-100 text-green-800";
-      case "pending": return "bg-yellow-100 text-yellow-800";
-      default: return "bg-gray-100 text-gray-800";
+  const fetchDeliveryCharges = async () => {
+    if (!marahCompanyId) return;
+    
+    try {
+      const params = new URLSearchParams({
+        companyId: marahCompanyId,
+      });
+
+      if (searchTerm) params.append('search', searchTerm);
+      if (zoneFilter && zoneFilter !== 'all') params.append('zone', zoneFilter);
+      if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
+
+      const response = await fetch(`/api/marah/delivery-charges?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setDeliveryCharges(data.deliveryCharges || []);
+      } else {
+        setError('Failed to fetch delivery charges');
+      }
+    } catch (error) {
+      console.error('Error fetching delivery charges:', error);
+      setError('Failed to fetch delivery charges');
+    } finally {
+      setLoading(false);
     }
   };
+
+  const handleViewDeliveryCharge = (chargeId: string) => {
+    console.log('View delivery charge:', chargeId);
+  };
+
+  const handleEditDeliveryCharge = (chargeId: string) => {
+    // For now, show a message that editing is not implemented
+    alert('Delivery charge editing is not yet implemented. This feature will be available soon.');
+  };
+
+  const handleDeleteDeliveryCharge = async (chargeId: string) => {
+    if (!confirm('Are you sure you want to delete this delivery charge? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/marah/delivery-charges/${chargeId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+      });
+
+      if (response.ok) {
+        fetchDeliveryCharges();
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || 'Failed to delete delivery charge');
+      }
+    } catch (error) {
+      console.error('Error deleting delivery charge:', error);
+      alert('Failed to delete delivery charge');
+    }
+  };
+
+  const handleToggleStatus = async (chargeId: string, currentStatus: boolean) => {
+    try {
+      const response = await fetch(`/api/marah/delivery-charges/${chargeId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+        body: JSON.stringify({
+          isActive: !currentStatus,
+        }),
+      });
+
+      if (response.ok) {
+        fetchDeliveryCharges();
+      } else {
+        alert('Failed to update delivery charge status');
+      }
+    } catch (error) {
+      console.error('Error updating delivery charge:', error);
+      alert('Failed to update delivery charge status');
+    }
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-AE', {
+      style: 'currency',
+      currency: 'AED',
+    }).format(amount);
+  };
+
+  const formatTime = (minutes: number) => {
+    if (minutes < 60) {
+      return `${minutes} min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+  };
+
+  const getStatusColor = (isActive: boolean) => {
+    return isActive 
+      ? 'bg-green-100 text-green-800' 
+      : 'bg-red-100 text-red-800';
+  };
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setZoneFilter("all");
+    setStatusFilter("all");
+  };
+
+  const exportDeliveryCharges = () => {
+    const headers = ['Zone', 'Area', 'Base Charge', 'Per KM Charge', 'Min Charge', 'Max Charge', 'Est. Time', 'Status'];
+    const csvContent = [
+      headers.join(','),
+      ...deliveryCharges.map(charge => [
+        charge.zone,
+        charge.area,
+        charge.baseCharge,
+        charge.perKmCharge,
+        charge.minimumCharge,
+        charge.maximumCharge || '',
+        charge.estimatedTime,
+        charge.isActive ? 'Active' : 'Inactive'
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `marah-delivery-charges-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const getDeliveryStats = () => {
+    const totalZones = deliveryCharges.length;
+    const activeZones = deliveryCharges.filter(c => c.isActive).length;
+    const avgBaseCharge = deliveryCharges.length > 0 
+      ? deliveryCharges.reduce((sum, c) => sum + c.baseCharge, 0) / deliveryCharges.length
+      : 0;
+    const avgPerKmCharge = deliveryCharges.length > 0 
+      ? deliveryCharges.reduce((sum, c) => sum + c.perKmCharge, 0) / deliveryCharges.length
+      : 0;
+    const avgEstimatedTime = deliveryCharges.length > 0 
+      ? deliveryCharges.reduce((sum, c) => sum + c.estimatedTime, 0) / deliveryCharges.length
+      : 0;
+
+    return { totalZones, activeZones, avgBaseCharge, avgPerKmCharge, avgEstimatedTime };
+  };
+
+  const stats = getDeliveryStats();
+
+  // Get unique zones for filter
+  const uniqueZones = [...new Set(deliveryCharges.map(charge => charge.zone))];
+  const zoneOptions = [
+    { value: "all", label: "All Zones" },
+    ...uniqueZones.map(zone => ({ value: zone, label: zone }))
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Sidebar />
+        <div className={cn(
+          "flex-1 flex flex-col transition-all duration-300",
+          isDesktop && isOpen ? "ml-0" : "ml-0",
+          "min-w-0"
+        )}>
+          <Header />
+          <main className="flex-1 container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-6">
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Sidebar />
+        <div className={cn(
+          "flex-1 flex flex-col transition-all duration-300",
+          isDesktop && isOpen ? "ml-0" : "ml-0",
+          "min-w-0"
+        )}>
+          <Header />
+          <main className="flex-1 container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-6">
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Error</h3>
+                <p className="text-muted-foreground">{error}</p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
       
-      <div className="flex-1 flex flex-col">
-        <motion.header 
-          className="glass-header sticky top-0 z-50"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="container mx-auto px-8 py-6">
-            <div className="flex items-center justify-between">
-              <motion.div 
-                className="flex items-center space-x-4"
-                {...fadeInUp}
-                transition={{ delay: 0.2 }}
-              >
-                <div className="flex items-center space-x-3">
-                  <motion.div
-                    className="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center shadow-lg"
-                    whileHover={{ scale: 1.1, rotate: 10 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    <Calculator className="w-5 h-5 text-white" />
-                  </motion.div>
-                  <div>
-                    <h1 className="text-2xl font-bold text-gradient">Delivery Charges</h1>
-                    <p className="text-sm text-muted-foreground">Pricing models and zone-based rates</p>
-                  </div>
-                </div>
-              </motion.div>
-              
-              <motion.div 
-                className="flex items-center space-x-4"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input 
-                    placeholder="Search zones..." 
-                    className="pl-10 w-64 glass-card border-0 focus-premium"
-                  />
-                </div>
-                <Button variant="outline" className="glass-card border-0 hover-glow">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </Button>
-                <Button className="btn-premium">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Zone
-                </Button>
-              </motion.div>
-            </div>
-          </div>
-        </motion.header>
+      <div className={cn(
+        "flex-1 flex flex-col transition-all duration-300",
+        isDesktop && isOpen ? "ml-0" : "ml-0",
+        "min-w-0"
+      )}>
+        <Header />
 
-        <main className="flex-1 container mx-auto px-8 py-8">
-          {/* Stats Cards */}
+        <main className="flex-1 container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-6">
+          {/* Page Header */}
           <motion.div 
-            className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12"
+            className="mb-6"
+            {...fadeInUp}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gradient mb-2">
+                  Delivery Charges Management
+                </h1>
+                <p className="text-muted-foreground">
+                  Manage delivery zones and pricing with distance-based calculations
+                </p>
+              </div>
+              <div className="flex items-center space-x-2 mt-4 sm:mt-0">
+                <Button onClick={exportDeliveryCharges} variant="outline" size="sm">
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+                <Button onClick={fetchDeliveryCharges} variant="outline" size="sm">
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Refresh
+                </Button>
+                <Button size="sm" onClick={() => setShowAddDeliveryCharge(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Zone
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Delivery Stats */}
+          <motion.div 
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6"
             variants={staggerContainer}
             initial="initial"
             animate="animate"
           >
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-blue-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Total Revenue
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between text-sm">
+                    <span>Total Zones</span>
+                    <Map className="h-4 w-4 text-blue-600" />
                   </CardTitle>
-                  <DollarSign className="h-5 w-5 text-blue-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">$32.6K</div>
-                  <p className="text-sm text-green-600 font-medium">+15.2% vs last month</p>
+                  <div className="text-2xl font-bold text-gradient">
+                    {stats.totalZones}
+                  </div>
+                  <p className="text-xs text-blue-600">
+                    Delivery areas
+                  </p>
                 </CardContent>
               </Card>
             </motion.div>
 
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-green-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Active Zones
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between text-sm">
+                    <span>Active Zones</span>
+                    <Navigation className="h-4 w-4 text-green-600" />
                   </CardTitle>
-                  <MapPin className="h-5 w-5 text-green-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">12</div>
-                  <p className="text-sm text-green-600 font-medium">2 new this month</p>
+                  <div className="text-2xl font-bold text-green-600">
+                    {stats.activeZones}
+                  </div>
+                  <p className="text-xs text-green-600">
+                    Currently serving
+                  </p>
                 </CardContent>
               </Card>
             </motion.div>
 
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-purple-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Avg Charge
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between text-sm">
+                    <span>Avg Base Charge</span>
+                    <DollarSign className="h-4 w-4 text-purple-600" />
                   </CardTitle>
-                  <Calculator className="h-5 w-5 text-purple-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">$8.45</div>
-                  <p className="text-sm text-green-600 font-medium">+$0.32 vs last month</p>
+                  <div className="text-2xl font-bold text-purple-600">
+                    {formatCurrency(stats.avgBaseCharge)}
+                  </div>
+                  <p className="text-xs text-purple-600">
+                    Base delivery fee
+                  </p>
                 </CardContent>
               </Card>
             </motion.div>
 
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-orange-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Avg Delivery Time
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between text-sm">
+                    <span>Avg Per KM</span>
+                    <Route className="h-4 w-4 text-orange-600" />
                   </CardTitle>
-                  <Clock className="h-5 w-5 text-orange-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">28 min</div>
-                  <p className="text-sm text-green-600 font-medium">-2 min vs last month</p>
+                  <div className="text-2xl font-bold text-orange-600">
+                    {formatCurrency(stats.avgPerKmCharge)}
+                  </div>
+                  <p className="text-xs text-orange-600">
+                    Per kilometer
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between text-sm">
+                    <span>Avg Delivery Time</span>
+                    <Clock className="h-4 w-4 text-indigo-600" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-indigo-600">
+                    {formatTime(Math.round(stats.avgEstimatedTime))}
+                  </div>
+                  <p className="text-xs text-indigo-600">
+                    Estimated time
+                  </p>
                 </CardContent>
               </Card>
             </motion.div>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-            {/* Pricing Models */}
-            <motion.div 
-              {...fadeInUp}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="card-premium border-0">
-                <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <motion.div
-                      className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                      whileHover={{ scale: 1.1, rotate: 10 }}
-                    >
-                      <Settings className="w-4 h-4 text-white" />
-                    </motion.div>
-                    <div>
-                      <CardTitle>Pricing Models</CardTitle>
-                      <CardDescription>
-                        Delivery service types
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {pricingModels.map((model, index) => (
-                      <motion.div 
-                        key={index}
-                        className="glass-card p-4 rounded-xl"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.5 + index * 0.1 }}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-foreground">{model.name}</h4>
-                          <Badge variant="outline" className="text-xs">
-                            {model.popularity}% usage
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-3">{model.description}</p>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <p className="text-muted-foreground">Base Rate</p>
-                            <p className="font-semibold text-foreground">{model.baseRate}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Distance Rate</p>
-                            <p className="font-semibold text-foreground">{model.distanceRate}</p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Zone Performance */}
-            <motion.div 
-              className="lg:col-span-2"
-              {...fadeInUp}
-              transition={{ delay: 0.6 }}
-            >
-              <Card className="card-premium border-0">
-                <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <motion.div
-                      className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                      whileHover={{ scale: 1.1, rotate: 10 }}
-                    >
-                      <BarChart3 className="w-4 h-4 text-white" />
-                    </motion.div>
-                    <div>
-                      <CardTitle>Zone Performance</CardTitle>
-                      <CardDescription>
-                        Revenue and delivery metrics by zone
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {deliveryZones.map((zone, index) => (
-                      <motion.div 
-                        key={zone.id}
-                        className="glass-card p-4 rounded-xl"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.7 + index * 0.1 }}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <h4 className="font-semibold text-foreground">{zone.name}</h4>
-                            <Badge 
-                              className={`text-xs ${getStatusBg(zone.status)}`}
-                              variant="outline"
-                            >
-                              {zone.status}
-                            </Badge>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-gradient">{zone.revenue}</p>
-                            <p className="text-sm text-muted-foreground">{zone.totalDeliveries} deliveries</p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <p className="text-muted-foreground">Base Rate</p>
-                            <p className="font-semibold text-foreground">{zone.baseRate}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Per KM</p>
-                            <p className="font-semibold text-foreground">{zone.perKmRate}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Avg Time</p>
-                            <p className="font-semibold text-foreground">{zone.avgDeliveryTime}</p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-
-          {/* Recent Charges */}
+          {/* Filters */}
           <motion.div 
+            className="mb-6"
             {...fadeInUp}
-            transition={{ delay: 0.8 }}
           >
-            <Card className="card-premium border-0">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <motion.div
-                    className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                    whileHover={{ scale: 1.1, rotate: 10 }}
+            <Card className="card-premium border-refined">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center space-x-2">
+                    <Filter className="w-5 h-5 text-primary" />
+                    <span>Delivery Zone Filtering</span>
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowFilters(!showFilters)}
                   >
-                    <DollarSign className="w-4 h-4 text-white" />
-                  </motion.div>
-                  <div>
-                    <CardTitle className="text-xl">Recent Delivery Charges</CardTitle>
-                    <CardDescription>
-                      Latest charge calculations and breakdowns
-                    </CardDescription>
-                  </div>
+                    {showFilters ? 'Hide Filters' : 'Show Filters'}
+                  </Button>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentCharges.map((charge, index) => (
-                    <motion.div 
-                      key={charge.id}
-                      className="glass-card p-6 rounded-2xl hover-lift group"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.9 + index * 0.1 }}
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <motion.div 
-                            className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center shadow-lg"
-                            whileHover={{ scale: 1.1, rotate: 10 }}
-                          >
-                            <Truck className="w-6 h-6 text-white" />
-                          </motion.div>
-                          
-                          <div>
-                            <div className="flex items-center space-x-3 mb-1">
-                              <h3 className="font-semibold text-lg text-foreground">{charge.orderId}</h3>
-                              <Badge 
-                                className={`text-xs ${getStatusBg(charge.status)}`}
-                                variant="outline"
-                              >
-                                {charge.status}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {charge.deliveryType}
-                              </Badge>
-                            </div>
-                            <p className="text-sm font-medium text-foreground mb-1">Customer: {charge.customer}</p>
-                            <div className="flex items-center space-x-4 text-sm text-muted-foreground mb-2">
-                              <span>Zone: {charge.zone}</span>
-                              <span>•</span>
-                              <span>Distance: {charge.distance}</span>
-                            </div>
-                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                              <span>Base: {charge.baseCharge}</span>
-                              <span>•</span>
-                              <span>Distance: {charge.distanceCharge}</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="text-right">
-                          <div className="mb-4">
-                            <p className="text-sm text-muted-foreground">Total Charge</p>
-                            <p className="text-2xl font-bold text-gradient">{charge.totalCharge}</p>
-                          </div>
-                          
-                          <div className="flex items-center space-x-2">
-                            <Button size="sm" className="btn-premium">
-                              <Eye className="w-4 h-4 mr-2" />
-                              View Details
-                            </Button>
-                            <Button size="sm" variant="outline" className="glass-card border-0 hover-glow">
-                              <Edit className="w-4 h-4 mr-2" />
-                              Adjust
-                            </Button>
-                          </div>
-                        </div>
+              
+              {showFilters && (
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="search">Search Zones</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                        <Input
+                          id="search"
+                          placeholder="Zone, area name..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
                       </div>
-                    </motion.div>
-                  ))}
-                </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="zone">Zone</Label>
+                      <Select value={zoneFilter} onValueChange={setZoneFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="All zones" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {zoneOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="status">Status</Label>
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="All statuses" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t">
+                    <div className="text-sm text-muted-foreground">
+                      {deliveryCharges.length} zones found
+                    </div>
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      Clear All Filters
+                    </Button>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          </motion.div>
+
+          {/* Delivery Charges Table */}
+          <motion.div 
+            {...fadeInUp}
+          >
+            <Card className="card-premium border-refined">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Truck className="w-5 h-5 text-primary" />
+                  <span>Delivery Zones & Charges</span>
+                </CardTitle>
+                <CardDescription>
+                  Delivery zones with pricing structure and estimated delivery times
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {deliveryCharges.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Zone & Area</TableHead>
+                          <TableHead>Base Charge</TableHead>
+                          <TableHead>Per KM Charge</TableHead>
+                          <TableHead>Min/Max Charge</TableHead>
+                          <TableHead>Est. Time</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {deliveryCharges.map((charge) => (
+                          <TableRow key={charge.id}>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <MapPin className="w-4 h-4 text-muted-foreground" />
+                                <div>
+                                  <div className="font-medium">{charge.zone}</div>
+                                  <div className="text-sm text-muted-foreground">{charge.area}</div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-semibold text-green-600">
+                                {formatCurrency(charge.baseCharge)}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-semibold">
+                                {formatCurrency(charge.perKmCharge)}/km
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                <div>Min: {formatCurrency(charge.minimumCharge)}</div>
+                                {charge.maximumCharge && (
+                                  <div>Max: {formatCurrency(charge.maximumCharge)}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-1">
+                                <Clock className="w-3 h-3 text-muted-foreground" />
+                                <span className="text-sm">{formatTime(charge.estimatedTime)}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                className={cn("text-xs cursor-pointer", getStatusColor(charge.isActive))}
+                                onClick={() => handleToggleStatus(charge.id, charge.isActive)}
+                              >
+                                {charge.isActive ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex space-x-1">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  title="View Details"
+                                  onClick={() => handleViewDeliveryCharge(charge.id)}
+                                >
+                                  <Eye className="w-3 h-3" />
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  title="Edit Zone"
+                                  onClick={() => handleEditDeliveryCharge(charge.id)}
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="text-red-600 hover:text-red-700"
+                                  onClick={() => handleDeleteDeliveryCharge(charge.id)}
+                                  title="Delete Zone"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Truck className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Delivery Zones Found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {searchTerm || zoneFilter !== 'all' || statusFilter !== 'all'
+                        ? "No delivery zones match your current filters."
+                        : "No delivery zones have been configured yet."
+                      }
+                    </p>
+                    {(searchTerm || zoneFilter !== 'all' || statusFilter !== 'all') ? (
+                      <Button variant="outline" onClick={clearFilters}>
+                        Clear Filters
+                      </Button>
+                    ) : (
+                      <Button onClick={() => setShowAddDeliveryCharge(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add First Zone
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
         </main>
       </div>
+
+      {/* Add Delivery Charge Modal */}
+      <AddDeliveryChargeModal
+        isOpen={showAddDeliveryCharge}
+        onClose={() => setShowAddDeliveryCharge(false)}
+        onDeliveryChargeCreated={fetchDeliveryCharges}
+        companyId={marahCompanyId || ""}
+      />
     </div>
   );
 } 

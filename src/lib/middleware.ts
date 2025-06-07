@@ -5,8 +5,8 @@ export interface AuthenticatedRequest extends NextRequest {
   user?: JWTPayload;
 }
 
-export function withAuth(handler: (request: AuthenticatedRequest) => Promise<NextResponse>) {
-  return async (request: NextRequest): Promise<NextResponse> => {
+export function withAuth(handler: (request: AuthenticatedRequest, ...args: any[]) => Promise<NextResponse>) {
+  return async (request: NextRequest, ...args: any[]): Promise<NextResponse> => {
     try {
       const token = getTokenFromRequest(request);
       
@@ -30,7 +30,7 @@ export function withAuth(handler: (request: AuthenticatedRequest) => Promise<Nex
       const authenticatedRequest = request as AuthenticatedRequest;
       authenticatedRequest.user = user;
       
-      return handler(authenticatedRequest);
+      return handler(authenticatedRequest, ...args);
     } catch (error) {
       console.error('Auth middleware error:', error);
       return NextResponse.json(
@@ -42,8 +42,8 @@ export function withAuth(handler: (request: AuthenticatedRequest) => Promise<Nex
 }
 
 export function withRole(roles: string[]) {
-  return function(handler: (request: AuthenticatedRequest) => Promise<NextResponse>) {
-    return withAuth(async (request: AuthenticatedRequest): Promise<NextResponse> => {
+  return function(handler: (request: AuthenticatedRequest, ...args: any[]) => Promise<NextResponse>) {
+    return withAuth(async (request: AuthenticatedRequest, ...args: any[]): Promise<NextResponse> => {
       if (!request.user || !roles.includes(request.user.role)) {
         return NextResponse.json(
           { error: 'Insufficient permissions' },
@@ -51,7 +51,7 @@ export function withRole(roles: string[]) {
         );
       }
       
-      return handler(request);
+      return handler(request, ...args);
     });
   };
 } 

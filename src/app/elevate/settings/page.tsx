@@ -300,7 +300,7 @@ export default function ElevateSettings() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="currency">Currency</Label>
-                      <Select defaultValue="usd">
+                      <Select defaultValue="aed">
                         <SelectTrigger className="glass-card border-0 focus-premium">
                           <SelectValue />
                         </SelectTrigger>

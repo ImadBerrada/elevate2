@@ -55,6 +55,8 @@ export const businessSchema = z.object({
   partnership: z.enum(['STRATEGIC_ALLIANCE', 'INVESTMENT_OPPORTUNITY', 'CO_INVESTMENT', 'JOINT_VENTURE', 'STRATEGIC_INVESTMENT', 'SERVICE_PARTNERSHIP']).optional(),
   dealValue: z.string().optional(),
   rating: z.number().min(1).max(5).optional(),
+  benefits: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
   picture: z.string().optional(),
 });
 
@@ -68,13 +70,48 @@ export const employerSchema = z.object({
   size: z.string().optional(),
   location: z.string().optional(),
   founded: z.string().optional(),
-  status: z.enum(['NEW', 'ACTIVE', 'PREMIUM', 'INACTIVE']).optional(),
+  status: z.enum(['NEW', 'ACTIVE', 'PREMIUM', 'INACTIVE', 'PARTNERSHIP']).optional(),
   partnership: z.string().optional(),
   openPositions: z.number().optional(),
   placementRate: z.number().optional(),
   avgSalary: z.string().optional(),
   rating: z.number().min(1).max(5).optional(),
+  benefits: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
   picture: z.string().optional(),
+});
+
+// User schema - Updated to match current database schema
+export const userSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Invalid email address'),
+  role: z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']), // Match database enum
+  avatar: z.string().optional(),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  // Frontend-only fields (not stored in database yet)
+  phone: z.string().optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).optional(),
+  company: z.string().optional(),
+  department: z.string().optional(),
+  position: z.string().optional(),
+  location: z.string().optional(),
+});
+
+export const updateUserSchema = z.object({
+  firstName: z.string().min(1, 'First name is required').optional(),
+  lastName: z.string().min(1, 'Last name is required').optional(),
+  email: z.string().email('Invalid email address').optional(),
+  role: z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']).optional(), // Match database enum
+  avatar: z.string().optional(),
+  password: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  // Frontend-only fields (not stored in database yet)
+  phone: z.string().optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).optional(),
+  company: z.string().optional(),
+  department: z.string().optional(),
+  position: z.string().optional(),
+  location: z.string().optional(),
 });
 
 // Type exports
@@ -84,3 +121,5 @@ export type ActivityInput = z.infer<typeof activitySchema>;
 export type ContactInput = z.infer<typeof contactSchema>;
 export type BusinessInput = z.infer<typeof businessSchema>;
 export type EmployerInput = z.infer<typeof employerSchema>; 
+export type UserInput = z.infer<typeof userSchema>;
+export type UpdateUserInput = z.infer<typeof updateUserSchema>; 

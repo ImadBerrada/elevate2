@@ -16,17 +16,25 @@ import {
   Search,
   Briefcase,
   Target,
-  Loader2
+  Loader2,
+  Camera,
+  Upload
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sidebar } from "@/components/sidebar";
-import { BurgerMenu } from "@/components/burger-menu";
+import { Header } from "@/components/header";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
+import { ImageUpload } from "@/components/ui/image-upload";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -35,11 +43,26 @@ const fadeInUp = {
 };
 
 export default function BusinessNetworkBusiness() {
-  const { isOpen } = useSidebar();
+  const { isOpen, isMobile, isTablet, isDesktop } = useSidebar();
   const [businesses, setBusinesses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [stats, setStats] = useState<any>(null);
+  const [isAddBusinessOpen, setIsAddBusinessOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [businessData, setBusinessData] = useState({
+    name: "",
+    industry: "",
+    description: "",
+    location: "",
+    size: "",
+    founded: "",
+    status: "PROSPECT",
+    partnership: "",
+    rating: 1,
+    picture: ""
+  });
 
   useEffect(() => {
     fetchBusinesses();
@@ -77,6 +100,54 @@ export default function BusinessNetworkBusiness() {
     }
   };
 
+  const handleBusinessSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await apiClient.createBusiness({
+        name: businessData.name,
+        industry: businessData.industry || undefined,
+        description: businessData.description || undefined,
+        location: businessData.location || undefined,
+        size: businessData.size || undefined,
+        founded: businessData.founded || undefined,
+        status: businessData.status as any,
+        partnership: businessData.partnership ? businessData.partnership as any : undefined,
+        rating: businessData.rating,
+        picture: businessData.picture || undefined
+      });
+
+      setIsAddBusinessOpen(false);
+      // Reset form
+      setBusinessData({
+        name: "",
+        industry: "",
+        description: "",
+        location: "",
+        size: "",
+        founded: "",
+        status: "PROSPECT",
+        partnership: "",
+        rating: 1,
+        picture: ""
+      });
+      
+      // Refresh businesses and stats
+      await fetchBusinesses();
+      await fetchStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create business');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const updateBusinessData = (field: string, value: string | number) => {
+    setBusinessData(prev => ({ ...prev, [field]: value }));
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PARTNER': return 'bg-green-100 text-green-800';
@@ -109,65 +180,250 @@ export default function BusinessNetworkBusiness() {
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isOpen ? 'ml-0' : 'ml-0'}`}>
-        <motion.header 
-          className="glass-header sticky top-0 z-50"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          <div className="container mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
+      <div className={cn(
+        "flex-1 flex flex-col transition-all duration-300",
+        isDesktop && isOpen ? "ml-0" : "ml-0",
+        "min-w-0" // Prevent content overflow
+      )}>
+        <Header />
+
+        <main className="flex-1 container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-6">
+          {/* Action Bar */}
               <motion.div 
-                className="flex items-center space-x-3"
-                {...fadeInUp}
-                transition={{ delay: 0.1 }}
-              >
-                <BurgerMenu />
-                <div className="flex items-center space-x-3">
-                  <motion.div
-                    className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center shadow-refined"
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  >
-                    <Building className="w-4 h-4 text-white" />
-                  </motion.div>
-                  <div>
-                    <h1 className="text-xl font-elegant text-gradient">Business Partners</h1>
-                    <p className="text-sm text-muted-foreground font-refined">Partnership & Opportunity Management</p>
-                  </div>
-                </div>
-              </motion.div>
-              
-              <motion.div 
-                className="flex items-center space-x-3"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
+            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mb-6"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-3 h-3 sm:w-4 sm:h-4" />
                   <Input
                     placeholder="Search businesses..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 w-64 border-refined"
+                className="pl-8 sm:pl-10 border-refined text-xs sm:text-sm h-9 sm:h-10"
+              />
+            </div>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Button variant="outline" className="border-refined text-xs sm:text-sm h-9 sm:h-10 px-3 sm:px-4">
+                <Filter className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Filter</span>
+                <span className="sm:hidden">Filter</span>
+              </Button>
+              <Dialog open={isAddBusinessOpen} onOpenChange={setIsAddBusinessOpen}>
+                <DialogTrigger asChild>
+                  <Button className="btn-premium text-xs sm:text-sm h-9 sm:h-10 px-3 sm:px-4">
+                    <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Add Business</span>
+                    <span className="sm:hidden">Add</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[600px] glass-card border-refined max-h-[90vh] overflow-hidden">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-elegant text-gradient">Add New Business Partner</DialogTitle>
+                    <DialogDescription className="text-refined">
+                      Add a new business partner to your network for potential collaborations and partnerships.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="max-h-[calc(90vh-8rem)] overflow-y-auto pr-2">
+                    <form onSubmit={handleBusinessSubmit} className="space-y-6">
+                      {/* Company Logo Upload */}
+                      <ImageUpload
+                        id="business-picture"
+                        label="Company Logo"
+                        value={businessData.picture}
+                        onChange={(value) => updateBusinessData("picture", value || "")}
+                        placeholder="Upload company logo"
+                        size="lg"
+                        shape="square"
+                      />
+
+                      {/* Basic Information */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="name" className="text-sm font-medium">Business Name *</Label>
+                          <Input
+                            id="name"
+                            placeholder="Enter business name..."
+                            value={businessData.name}
+                            onChange={(e) => updateBusinessData("name", e.target.value)}
+                            className="border-refined"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="industry" className="text-sm font-medium">Industry</Label>
+                          <Select value={businessData.industry} onValueChange={(value) => updateBusinessData("industry", value)}>
+                            <SelectTrigger className="border-refined">
+                              <SelectValue placeholder="Select industry" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="TECHNOLOGY">Technology</SelectItem>
+                              <SelectItem value="FINANCE">Finance</SelectItem>
+                              <SelectItem value="HEALTHCARE">Healthcare</SelectItem>
+                              <SelectItem value="EDUCATION">Education</SelectItem>
+                              <SelectItem value="MANUFACTURING">Manufacturing</SelectItem>
+                              <SelectItem value="RETAIL">Retail</SelectItem>
+                              <SelectItem value="CONSULTING">Consulting</SelectItem>
+                              <SelectItem value="REAL_ESTATE">Real Estate</SelectItem>
+                              <SelectItem value="ENERGY">Energy</SelectItem>
+                              <SelectItem value="TELECOMMUNICATIONS">Telecommunications</SelectItem>
+                              <SelectItem value="AUTOMOTIVE">Automotive</SelectItem>
+                              <SelectItem value="MEDIA">Media & Entertainment</SelectItem>
+                              <SelectItem value="OTHER">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="description" className="text-sm font-medium">Business Description</Label>
+                        <Textarea
+                          id="description"
+                          placeholder="Describe the business and potential partnership opportunities..."
+                          value={businessData.description}
+                          onChange={(e) => updateBusinessData("description", e.target.value)}
+                          className="border-refined min-h-[100px]"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="location" className="text-sm font-medium">Location</Label>
+                          <Input
+                            id="location"
+                            placeholder="City, Country"
+                            value={businessData.location}
+                            onChange={(e) => updateBusinessData("location", e.target.value)}
+                            className="border-refined"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="size" className="text-sm font-medium">Company Size</Label>
+                          <Select value={businessData.size} onValueChange={(value) => updateBusinessData("size", value)}>
+                            <SelectTrigger className="border-refined">
+                              <SelectValue placeholder="Select company size" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="STARTUP">Startup (1-10 employees)</SelectItem>
+                              <SelectItem value="SMALL">Small (11-50 employees)</SelectItem>
+                              <SelectItem value="MEDIUM">Medium (51-200 employees)</SelectItem>
+                              <SelectItem value="LARGE">Large (201-1000 employees)</SelectItem>
+                              <SelectItem value="ENTERPRISE">Enterprise (1000+ employees)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="founded" className="text-sm font-medium">Founded Year</Label>
+                          <Input
+                            id="founded"
+                            type="number"
+                            placeholder="e.g., 2020"
+                            value={businessData.founded}
+                            onChange={(e) => updateBusinessData("founded", e.target.value)}
+                            className="border-refined"
+                            min="1800"
+                            max={new Date().getFullYear()}
                   />
                 </div>
-                <Button variant="outline" className="border-refined">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </Button>
-                <Button className="btn-premium">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Business
-                </Button>
-              </motion.div>
-            </div>
-          </div>
-        </motion.header>
 
-        <main className="flex-1 container mx-auto px-6 py-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="status" className="text-sm font-medium">Partnership Status</Label>
+                          <Select value={businessData.status} onValueChange={(value) => updateBusinessData("status", value)}>
+                            <SelectTrigger className="border-refined">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PROSPECT">Prospect</SelectItem>
+                              <SelectItem value="NEGOTIATING">Negotiating</SelectItem>
+                              <SelectItem value="PARTNER">Active Partner</SelectItem>
+                              <SelectItem value="INACTIVE">Inactive</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="partnership" className="text-sm font-medium">Partnership Type</Label>
+                          <Select value={businessData.partnership} onValueChange={(value) => updateBusinessData("partnership", value)}>
+                            <SelectTrigger className="border-refined">
+                              <SelectValue placeholder="Select partnership type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="STRATEGIC">Strategic Partnership</SelectItem>
+                              <SelectItem value="INVESTMENT">Investment Opportunity</SelectItem>
+                              <SelectItem value="JOINT_VENTURE">Joint Venture</SelectItem>
+                              <SelectItem value="SUPPLIER">Supplier/Vendor</SelectItem>
+                              <SelectItem value="CLIENT">Client/Customer</SelectItem>
+                              <SelectItem value="REFERRAL">Referral Partner</SelectItem>
+                              <SelectItem value="OTHER">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="rating" className="text-sm font-medium">Partnership Rating</Label>
+                          <Select value={businessData.rating.toString()} onValueChange={(value) => updateBusinessData("rating", parseInt(value))}>
+                            <SelectTrigger className="border-refined">
+                              <SelectValue placeholder="Select rating" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">⭐ 1 Star - Low Priority</SelectItem>
+                              <SelectItem value="2">⭐⭐ 2 Stars - Medium Priority</SelectItem>
+                              <SelectItem value="3">⭐⭐⭐ 3 Stars - High Priority</SelectItem>
+                              <SelectItem value="4">⭐⭐⭐⭐ 4 Stars - Very High Priority</SelectItem>
+                              <SelectItem value="5">⭐⭐⭐⭐⭐ 5 Stars - Strategic Partner</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {error && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-red-600 text-sm">{error}</p>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end space-x-3">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => setIsAddBusinessOpen(false)}
+                          disabled={submitting}
+                        >
+                          Cancel
+                </Button>
+                        <Button 
+                          type="submit" 
+                          className="btn-premium"
+                          disabled={submitting}
+                        >
+                          {submitting ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Adding...
+                            </>
+                          ) : (
+                            <>
+                  <Plus className="w-4 h-4 mr-2" />
+                              Add Business Partner
+                            </>
+                          )}
+                </Button>
+                      </div>
+                    </form>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </motion.div>
+
           <motion.div 
             className="mb-8"
             {...fadeInUp}
@@ -260,8 +516,16 @@ export default function BusinessNetworkBusiness() {
                       >
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex items-start space-x-3">
-                            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                              {business.picture ? (
+                                <img 
+                                  src={business.picture} 
+                                  alt={`${business.name} logo`}
+                                  className="w-full h-full object-cover rounded-lg"
+                                />
+                              ) : (
                               <Building className="w-6 h-6 text-primary" />
+                              )}
                             </div>
                             <div className="flex-1">
                               <h4 className="font-medium text-lg">{business.name}</h4>

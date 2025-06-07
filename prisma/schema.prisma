@@ -19,8 +19,8 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   password  String
-  firstName String?
-  lastName  String?
+  firstName String
+  lastName  String
   avatar    String?
   role      UserRole @default(USER)
   createdAt DateTime @default(now())
@@ -31,8 +31,117 @@ model User {
   contacts   Contact[]
   businesses Business[]
   employers  Employer[]
+  companies  Company[]
+  employees  Employee[]
+  assetTypes AssetType[]
 
   @@map("users")
+}
+
+// Company model for managing companies
+model Company {
+  id            String        @id @default(cuid())
+  name          String
+  description   String?
+  industry      String
+  size          String
+  location      String
+  website       String?
+  email         String
+  phone         String
+  status        CompanyStatus @default(ACTIVE)
+  foundedYear   Int?
+  revenue       String?
+  logo          String?
+  employeeCount Int           @default(0)
+  
+  // New fields for trade license and assets
+  tradeLicenseNumber String?
+  tradeLicenseExpiry DateTime?
+  tradeLicenseDocument String? // Base64 or file path
+  
+  userId        String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employees Employee[]
+  actualEmployees Employee[] @relation("ActualCompany")
+  assets    CompanyAsset[]
+  
+  // Marah Relations
+  marahCustomers       MarahCustomer[]       @relation("MarahCustomers")
+  marahGames          MarahGame[]           @relation("MarahGames")
+  marahDrivers        MarahDriver[]         @relation("MarahDrivers")
+  marahOrders         MarahOrder[]          @relation("MarahOrders")
+  marahPayments       MarahPayment[]        @relation("MarahPayments")
+  marahExpenses       MarahExpense[]        @relation("MarahExpenses")
+  marahDeliveryCharges MarahDeliveryCharge[] @relation("MarahDeliveryCharges")
+  marahSettings       MarahSetting[]        @relation("MarahSettings")
+
+  @@map("companies")
+}
+
+// Employee model for managing employees
+model Employee {
+  id         String         @id @default(cuid())
+  firstName  String
+  lastName   String
+  email      String         @unique
+  phone      String?
+  position   String
+  department String
+  salary     String?        // Official contract salary
+  actualSalary String?      // Actual salary
+  startDate  DateTime
+  status     EmployeeStatus @default(ACTIVE)
+  location   String?
+  manager    String?
+  skills     String[]
+  avatar     String?
+  companyId  String         // Official company
+  actualCompanyId String?   // Actual company (if different)
+  userId     String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actualCompany Company? @relation("ActualCompany", fields: [actualCompanyId], references: [id], onDelete: SetNull)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  visa    EmployeeVisa?
+
+  @@map("employees")
+}
+
+// Employee visa details
+model EmployeeVisa {
+  id              String    @id @default(cuid())
+  employeeId      String    @unique
+  visaNumber      String?
+  visaType        String?
+  issueDate       DateTime?
+  expiryDate      DateTime?
+  sponsor         String?
+  nationality     String?
+  passportNumber  String?
+  passportExpiry  DateTime?
+  emiratesId      String?
+  emiratesIdExpiry DateTime?
+  laborCardNumber String?
+  laborCardExpiry DateTime?
+  visaDocument    String?   // Base64 or file path
+  passportDocument String?  // Base64 or file path
+  emiratesIdDocument String? // Base64 or file path
+  laborCardDocument String? // Base64 or file path
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("employee_visas")
 }
 
 // Activity model for tracking business network activities
@@ -148,6 +257,18 @@ enum UserRole {
   SUPER_ADMIN
 }
 
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
 enum ActivityType {
   MEETING
   CALL
@@ -197,4 +318,392 @@ enum EmployerStatus {
   ACTIVE
   PREMIUM
   INACTIVE
+  PARTNERSHIP
+}
+
+enum AssetCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+// Asset types with depreciation rates
+model AssetType {
+  id                String    @id @default(cuid())
+  name              String    @unique
+  depreciationRate  Float     // Percentage (e.g., 10.0 for 10%)
+  description       String?
+  fields            Json      // Dynamic fields for this asset type
+  userId            String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets CompanyAsset[]
+
+  @@map("asset_types")
+}
+
+// Company assets
+model CompanyAsset {
+  id              String     @id @default(cuid())
+  name            String
+  assetTypeId     String
+  companyId       String
+  purchaseValue   Float
+  currentValue    Float
+  purchaseDate    DateTime
+  condition       AssetCondition @default(GOOD)
+  location        String?
+  serialNumber    String?
+  description     String?
+  customFields    Json       // Dynamic fields based on asset type
+  documents       String[]   // Array of document URLs/base64
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // Relations
+  assetType AssetType @relation(fields: [assetTypeId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("company_assets")
+}
+
+// ===== MARAH INFLATABLE GAMES RENTAL SYSTEM =====
+
+// Customer model for Marah system
+model MarahCustomer {
+  id                  String              @id @default(cuid())
+  name                String
+  phone               String              @unique
+  email               String?
+  notes               String?
+  status              MarahCustomerStatus @default(ACTIVE)
+  customerType        MarahCustomerType   @default(REGULAR)
+  balance             Decimal             @default(0) @db.Decimal(10, 2)
+  loyaltyPoints       Int                 @default(0)
+  totalOrders         Int                 @default(0)
+  completedOrders     Int                 @default(0)
+  totalSpent          Decimal             @default(0) @db.Decimal(10, 2)
+  averageOrderValue   Decimal             @default(0) @db.Decimal(10, 2)
+  lastOrderDate       DateTime?
+  registrationDate    DateTime            @default(now())
+  profilePicture      String?
+  dateOfBirth         DateTime?
+  emergencyContact    String?
+  emergencyPhone      String?
+  preferredLanguage   String              @default("en")
+  marketingConsent    Boolean             @default(true)
+  companyId           String              // Link to Company
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  // Relations
+  company   Company                @relation("MarahCustomers", fields: [companyId], references: [id], onDelete: Cascade)
+  addresses MarahCustomerAddress[]
+  orders    MarahOrder[]
+
+  @@map("marah_customers")
+}
+
+// Customer addresses for delivery
+model MarahCustomerAddress {
+  id         String  @id @default(cuid())
+  customerId String
+  name       String  // Address name (e.g., "Home", "Office")
+  address    String
+  zone       String? // For delivery charge calculation
+  isDefault  Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  customer MarahCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orders   MarahOrder[]
+
+  @@map("marah_customer_addresses")
+}
+
+// Inflatable games/products
+model MarahGame {
+  id              String   @id @default(cuid())
+  nameEn          String   // English name
+  nameAr          String   // Arabic name
+  description     String?
+  category        String
+  pricePerDay     Decimal  @db.Decimal(10, 2)
+  pricePerWeek    Decimal? @db.Decimal(10, 2)
+  pricePerMonth   Decimal? @db.Decimal(10, 2)
+  isDiscountable  Boolean  @default(true)
+  isAvailable     Boolean  @default(true)
+  discountPercentage Int?  @default(0)
+  imageUrl        String?
+  dimensions      String?
+  capacity        Int?
+  ageGroup        String?
+  setupTime       Int?     // Setup time in minutes
+  images          String[] // Array of image URLs/paths
+  companyId       String   // Link to Company
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  company    Company          @relation("MarahGames", fields: [companyId], references: [id], onDelete: Cascade)
+  orderItems MarahOrderItem[]
+
+  @@map("marah_games")
+}
+
+// Delivery drivers
+model MarahDriver {
+  id                  String            @id @default(cuid())
+  name                String
+  phone               String            @unique
+  email               String?
+  licenseNumber       String?
+  vehicleInfo         String?
+  vehicleRegistration String?
+  status              MarahDriverStatus @default(ACTIVE)
+  profilePicture      String?
+  dateOfBirth         DateTime?
+  address             String?
+  emergencyContact    String?
+  emergencyPhone      String?
+  experience          String?           // Years of experience
+  salary              Decimal?          @db.Decimal(10, 2)
+  totalOrders         Int               @default(0)
+  completedOrders     Int               @default(0)
+  activeOrders        Int               @default(0)
+  totalRevenue        Decimal           @default(0) @db.Decimal(10, 2)
+  completionRate      Decimal           @default(0) @db.Decimal(5, 2)
+  rating              Decimal           @default(0) @db.Decimal(3, 2)
+  totalRatings        Int               @default(0)
+  licenseDocument     String?
+  vehicleDocument     String?
+  companyId           String            // Link to Company
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  // Relations
+  company Company      @relation("MarahDrivers", fields: [companyId], references: [id], onDelete: Cascade)
+  orders  MarahOrder[]
+  expenses MarahExpense[] @relation("DriverExpenses")
+
+  @@map("marah_drivers")
+}
+
+// Main order model
+model MarahOrder {
+  id              String           @id @default(cuid())
+  orderNumber     String           @unique
+  customerId      String
+  addressId       String
+  driverId        String?
+  status          MarahOrderStatus @default(PENDING)
+  paymentStatus   MarahPaymentStatus @default(PENDING)
+  orderDate       DateTime         @default(now())
+  eventDate       DateTime         // When the event is scheduled
+  eventEndDate    DateTime         // When games should be collected
+  eventTime       String?          // Preferred event time
+  setupTime       String?          // Preferred setup time
+  notes           String?
+  source          String           @default("PHONE") // Order source
+  companyId       String           // Link to Company
+  
+  // Pricing
+  subtotal        Decimal          @db.Decimal(10, 2)
+  discountAmount  Decimal          @default(0) @db.Decimal(10, 2)
+  deliveryCharge  Decimal          @default(0) @db.Decimal(10, 2)
+  totalAmount     Decimal          @db.Decimal(10, 2)
+  
+  // Delivery tracking
+  deliveredAt     DateTime?
+  collectedAt     DateTime?
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Relations
+  company     Company              @relation("MarahOrders", fields: [companyId], references: [id], onDelete: Cascade)
+  customer    MarahCustomer        @relation(fields: [customerId], references: [id])
+  address     MarahCustomerAddress @relation(fields: [addressId], references: [id])
+  driver      MarahDriver?         @relation(fields: [driverId], references: [id])
+  items       MarahOrderItem[]
+  payments    MarahPayment[]
+
+  @@map("marah_orders")
+}
+
+// Order items (games in each order)
+model MarahOrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  gameId    String
+  quantity  Int     @default(1)
+  pricePerDay Decimal @db.Decimal(10, 2)
+  days      Int     @default(1)
+  totalPrice Decimal @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  // Relations
+  order MarahOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  game  MarahGame  @relation(fields: [gameId], references: [id])
+
+  @@map("marah_order_items")
+}
+
+// Payment tracking
+model MarahPayment {
+  id            String              @id @default(cuid())
+  orderId       String
+  amount        Decimal             @db.Decimal(10, 2)
+  method        MarahPaymentMethod  // Changed from paymentMethod to method
+  status        MarahPaymentStatus  @default(PENDING)
+  transactionId String?
+  notes         String?
+  paidAt        DateTime?
+  companyId     String              // Link to Company
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  // Relations
+  order   MarahOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  company Company    @relation("MarahPayments", fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("marah_payments")
+}
+
+// Business expenses tracking
+model MarahExpense {
+  id          String               @id @default(cuid())
+  description String
+  amount      Decimal              @db.Decimal(10, 2)
+  category    MarahExpenseCategory
+  date        DateTime             @default(now())
+  receipt     String?              // Receipt image/document
+  notes       String?
+  vendor      String?              // Vendor/supplier name
+  location    String?              // Where expense occurred
+  receiptUrl  String?              // Receipt document URL
+  driverId    String?              // Link to driver for driver-specific expenses
+  isRecurring Boolean              @default(false)
+  tags        String[]             // Expense tags for categorization
+  companyId   String               // Link to Company
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  // Relations
+  company Company     @relation("MarahExpenses", fields: [companyId], references: [id], onDelete: Cascade)
+  driver  MarahDriver? @relation("DriverExpenses", fields: [driverId], references: [id])
+
+  @@map("marah_expenses")
+}
+
+// Delivery charges by zone
+model MarahDeliveryCharge {
+  id            String   @id @default(cuid())
+  zone          String   
+  area          String?
+  charge        Decimal? @db.Decimal(10, 2) // Keep old field for backward compatibility
+  baseCharge    Decimal? @db.Decimal(10, 2)
+  perKmCharge   Decimal? @db.Decimal(10, 2)
+  minimumCharge Decimal? @db.Decimal(10, 2)
+  maximumCharge Decimal? @db.Decimal(10, 2)
+  estimatedTime Int?     // in minutes
+  isActive      Boolean  @default(true)
+  notes         String?
+  companyId     String   // Link to Company
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  company Company @relation("MarahDeliveryCharges", fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([zone, companyId])
+  @@map("marah_delivery_charges")
+}
+
+// System settings
+model MarahSetting {
+  id        String   @id @default(cuid())
+  key       String   
+  value     String
+  companyId String   // Link to Company
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company Company @relation("MarahSettings", fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([key, companyId])
+
+  @@map("marah_settings")
+}
+
+// Enums for Marah system
+enum MarahOrderStatus {
+  PENDING     // 1 - New orders awaiting processing
+  CONFIRMED   // Order confirmed and scheduled
+  ASSIGNED    // Driver assigned
+  DELIVERED   // Games delivered and set up
+  ACTIVE      // Games are being used (rental period)
+  COLLECTING  // Driver collecting games
+  COMPLETED   // 2 - Successfully fulfilled orders
+  CANCELLED   // 3 - Cancelled orders
+}
+
+enum MarahDriverStatus {
+  ACTIVE
+  INACTIVE
+  BUSY
+}
+
+enum MarahPaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  ONLINE
+}
+
+enum MarahPaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  REFUNDED
+}
+
+enum MarahExpenseCategory {
+  FUEL
+  MAINTENANCE
+  MARKETING
+  SUPPLIES
+  UTILITIES
+  SALARIES
+  RENT
+  INSURANCE
+  EQUIPMENT
+  REPAIRS
+  OFFICE_SUPPLIES
+  PROFESSIONAL_SERVICES
+  TRAVEL
+  TRAINING
+  SOFTWARE
+  OTHER
+}
+
+enum MarahCustomerStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+  SUSPENDED
+}
+
+enum MarahCustomerType {
+  REGULAR
+  VIP
+  PREMIUM
+  CORPORATE
 }

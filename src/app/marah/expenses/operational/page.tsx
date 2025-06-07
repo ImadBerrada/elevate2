@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
+  Receipt, 
   DollarSign, 
   TrendingUp, 
   AlertTriangle,
@@ -13,14 +15,23 @@ import {
   Plus,
   Eye,
   Edit,
+  Trash2,
   Calendar,
-  Receipt
+  FileText,
+  Download,
+  ChevronDown,
+  X
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sidebar } from "@/components/sidebar";
+import { AddExpenseModal } from "@/components/modals/add-expense-modal";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { toNumber } from "@/lib/utils";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -36,115 +47,296 @@ const staggerContainer = {
   }
 };
 
+interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  category: string;
+  date: string;
+  receipt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CategoryTotal {
+  category: string;
+  total: number;
+  count: number;
+}
+
+interface ExpenseStats {
+  totalExpenses: number;
+  monthlyExpenses: number;
+  pendingExpenses: number;
+  avgExpenseAmount: number;
+}
+
 export default function OperationalExpenses() {
-  const expenses = [
-    {
-      id: "EXP-001",
-      category: "Server Infrastructure",
-      description: "AWS Cloud Services - Monthly Subscription",
-      amount: "$2,450",
-      date: "2024-01-20",
-      vendor: "Amazon Web Services",
-      status: "approved",
-      department: "Technology",
-      budgetCategory: "Infrastructure"
-    },
-    {
-      id: "EXP-002",
-      category: "Marketing",
-      description: "Social Media Advertising Campaign",
-      amount: "$1,800",
-      date: "2024-01-19",
-      vendor: "Meta Platforms",
-      status: "pending",
-      department: "Marketing",
-      budgetCategory: "Advertising"
-    },
-    {
-      id: "EXP-003",
-      category: "Office Supplies",
-      description: "Gaming Equipment and Accessories",
-      amount: "$650",
-      date: "2024-01-18",
-      vendor: "TechGear Solutions",
-      status: "approved",
-      department: "Operations",
-      budgetCategory: "Equipment"
-    },
-    {
-      id: "EXP-004",
-      category: "Software Licenses",
-      description: "Game Development Tools - Annual License",
-      amount: "$3,200",
-      date: "2024-01-17",
-      vendor: "Unity Technologies",
-      status: "approved",
-      department: "Development",
-      budgetCategory: "Software"
-    },
-    {
-      id: "EXP-005",
-      category: "Utilities",
-      description: "Office Electricity and Internet",
-      amount: "$890",
-      date: "2024-01-16",
-      vendor: "DEWA & Etisalat",
-      status: "paid",
-      department: "Operations",
-      budgetCategory: "Utilities"
-    }
-  ];
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [categoryTotals, setCategoryTotals] = useState<CategoryTotal[]>([]);
+  const [stats, setStats] = useState<ExpenseStats>({
+    totalExpenses: 0,
+    monthlyExpenses: 0,
+    pendingExpenses: 0,
+    avgExpenseAmount: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<string>("");
+  
+  // Modal states
+  const [showAddModal, setShowAddModal] = useState(false);
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
 
   const expenseCategories = [
-    { category: "Infrastructure", amount: "$8,450", percentage: 35, color: "bg-blue-500" },
-    { category: "Marketing", amount: "$5,200", percentage: 22, color: "bg-green-500" },
-    { category: "Software", amount: "$4,800", percentage: 20, color: "bg-purple-500" },
-    { category: "Equipment", percentage: 12, amount: "$2,900", color: "bg-orange-500" },
-    { category: "Utilities", percentage: 11, amount: "$2,650", color: "bg-red-500" }
+    { value: "FUEL", label: "Fuel" },
+    { value: "MAINTENANCE", label: "Maintenance" },
+    { value: "MARKETING", label: "Marketing" },
+    { value: "SUPPLIES", label: "Supplies" },
+    { value: "UTILITIES", label: "Utilities" },
+    { value: "SALARIES", label: "Salaries" },
+    { value: "RENT", label: "Rent" },
+    { value: "INSURANCE", label: "Insurance" },
+    { value: "OTHER", label: "Other" }
   ];
 
-  const budgetOverview = [
-    { department: "Technology", allocated: "$15,000", spent: "$12,450", remaining: "$2,550", utilization: 83 },
-    { department: "Marketing", allocated: "$8,000", spent: "$6,200", remaining: "$1,800", utilization: 78 },
-    { department: "Operations", allocated: "$5,000", spent: "$3,540", remaining: "$1,460", utilization: 71 },
-    { department: "Development", allocated: "$12,000", spent: "$9,800", remaining: "$2,200", utilization: 82 }
+  const dateFilters = [
+    { value: "all", label: "All Time" },
+    { value: "today", label: "Today" },
+    { value: "week", label: "This Week" },
+    { value: "month", label: "This Month" },
+    { value: "quarter", label: "This Quarter" },
+    { value: "year", label: "This Year" }
   ];
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "paid": return "text-green-600";
-      case "approved": return "text-blue-600";
-      case "pending": return "text-yellow-600";
-      case "rejected": return "text-red-600";
-      default: return "text-gray-600";
+  // Initialize company
+  useEffect(() => {
+    const initializeCompany = async () => {
+      try {
+        const response = await fetch('/api/companies', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const marahCompany = data.companies.find((company: any) => 
+            company.name === 'MARAH Inflatable Games Rental'
+          );
+          
+          if (marahCompany) {
+            setCompanyId(marahCompany.id);
+          } else {
+            // If MARAH company doesn't exist, create it
+            await createMarahCompany();
+          }
+        } else {
+          throw new Error('Failed to get companies');
+        }
+      } catch (error) {
+        console.error('Error initializing company:', error);
+        setError('Failed to initialize company');
+      }
+    };
+
+    const createMarahCompany = async () => {
+      try {
+        const response = await fetch('/api/companies/marah', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCompanyId(data.company.id);
+        } else {
+          throw new Error('Failed to create MARAH company');
+        }
+      } catch (error) {
+        console.error('Error creating MARAH company:', error);
+        setError('Failed to create MARAH company');
+      }
+    };
+
+    initializeCompany();
+  }, []);
+
+  // Fetch expenses data
+  const fetchExpenses = async () => {
+    if (!companyId) return;
+    
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({
+        companyId,
+        ...(selectedCategory !== "all" && { category: selectedCategory }),
+        ...(dateFilter !== "all" && { dateFilter }),
+        ...(searchTerm && { search: searchTerm }),
+        limit: "100"
+      });
+
+      const response = await fetch(`/api/marah/expenses?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setExpenses(data.expenses || []);
+        setCategoryTotals(data.categoryTotals || []);
+        
+        // Calculate stats
+        const totalExpenses = data.expenses?.length || 0;
+        const totalAmount = data.expenses?.reduce((sum: number, expense: Expense) => sum + toNumber(expense.amount), 0) || 0;
+        const avgAmount = totalExpenses > 0 ? totalAmount / totalExpenses : 0;
+        
+        // Calculate monthly expenses (current month)
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        const monthlyExpenses = data.expenses?.filter((expense: Expense) => {
+          const expenseDate = new Date(expense.date);
+          return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+        }).reduce((sum: number, expense: Expense) => sum + toNumber(expense.amount), 0) || 0;
+
+        setStats({
+          totalExpenses,
+          monthlyExpenses,
+          pendingExpenses: 0, // No pending status in current schema
+          avgExpenseAmount: avgAmount
+        });
+      } else {
+        throw new Error('Failed to fetch expenses');
+      }
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+      setError('Failed to load expenses');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getStatusBg = (status: string) => {
-    switch (status) {
-      case "paid": return "bg-green-100 text-green-800";
-      case "approved": return "bg-blue-100 text-blue-800";
-      case "pending": return "bg-yellow-100 text-yellow-800";
-      case "rejected": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
+  // Fetch data when companyId or filters change
+  useEffect(() => {
+    fetchExpenses();
+  }, [companyId, selectedCategory, dateFilter, searchTerm]);
+
+  // Auto-refresh every minute
+  useEffect(() => {
+    const interval = setInterval(fetchExpenses, 60000);
+    return () => clearInterval(interval);
+  }, [companyId, selectedCategory, dateFilter, searchTerm]);
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!confirm('Are you sure you want to delete this expense?')) return;
+
+    try {
+      const response = await fetch(`/api/marah/expenses/${expenseId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+      });
+
+      if (response.ok) {
+        fetchExpenses(); // Refresh data
+      } else {
+        throw new Error('Failed to delete expense');
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      alert('Failed to delete expense');
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "paid": return CheckCircle;
-      case "approved": return CheckCircle;
-      case "pending": return Clock;
-      case "rejected": return AlertTriangle;
-      default: return Clock;
+  const handleExport = () => {
+    if (expenses.length === 0) return;
+
+    const csvContent = [
+      ['ID', 'Description', 'Amount (AED)', 'Category', 'Date', 'Notes'].join(','),
+      ...expenses.map(expense => [
+        expense.id,
+        `"${expense.description}"`,
+        expense.amount.toFixed(2),
+        expense.category,
+        new Date(expense.date).toLocaleDateString(),
+        `"${expense.notes || ''}"`
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `marah-expenses-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedCategory("all");
+    setDateFilter("all");
+  };
+
+  const getActiveFiltersCount = () => {
+    let count = 0;
+    if (searchTerm) count++;
+    if (selectedCategory !== "all") count++;
+    if (dateFilter !== "all") count++;
+    return count;
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'FUEL': return '⛽';
+      case 'MAINTENANCE': return '🔧';
+      case 'MARKETING': return '📢';
+      case 'SUPPLIES': return '📦';
+      case 'UTILITIES': return '💡';
+      case 'SALARIES': return '💰';
+      case 'RENT': return '🏢';
+      case 'INSURANCE': return '🛡️';
+      default: return '📄';
     }
   };
 
-  const getUtilizationColor = (utilization: number) => {
-    if (utilization >= 90) return "text-red-600";
-    if (utilization >= 75) return "text-yellow-600";
-    return "text-green-600";
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'FUEL': return 'bg-red-100 text-red-800';
+      case 'MAINTENANCE': return 'bg-blue-100 text-blue-800';
+      case 'MARKETING': return 'bg-green-100 text-green-800';
+      case 'SUPPLIES': return 'bg-purple-100 text-purple-800';
+      case 'UTILITIES': return 'bg-yellow-100 text-yellow-800';
+      case 'SALARIES': return 'bg-indigo-100 text-indigo-800';
+      case 'RENT': return 'bg-pink-100 text-pink-800';
+      case 'INSURANCE': return 'bg-orange-100 text-orange-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
+
+  if (loading && expenses.length === 0) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading expenses...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -174,7 +366,7 @@ export default function OperationalExpenses() {
                   </motion.div>
                   <div>
                     <h1 className="text-2xl font-bold text-gradient">Operational Expenses</h1>
-                    <p className="text-sm text-muted-foreground">Cost tracking and budget management</p>
+                    <p className="text-sm text-muted-foreground">Track and manage business expenses</p>
                   </div>
                 </div>
               </motion.div>
@@ -190,18 +382,107 @@ export default function OperationalExpenses() {
                   <Input 
                     placeholder="Search expenses..." 
                     className="pl-10 w-64 glass-card border-0 focus-premium"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Button variant="outline" className="glass-card border-0 hover-glow">
+                <Button 
+                  variant="outline" 
+                  className="glass-card border-0 hover-glow relative"
+                  onClick={() => setShowFilters(!showFilters)}
+                >
                   <Filter className="w-4 h-4 mr-2" />
-                  Filter
+                  Filters
+                  {getActiveFiltersCount() > 0 && (
+                    <Badge className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                      {getActiveFiltersCount()}
+                    </Badge>
+                  )}
                 </Button>
-                <Button className="btn-premium">
+                <Button 
+                  variant="outline" 
+                  className="glass-card border-0 hover-glow"
+                  onClick={handleExport}
+                  disabled={expenses.length === 0}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+                <Button 
+                  className="btn-premium"
+                  onClick={() => setShowAddModal(true)}
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Expense
                 </Button>
               </motion.div>
             </div>
+
+            {/* Collapsible Filters */}
+            <Collapsible open={showFilters} onOpenChange={setShowFilters}>
+              <CollapsibleContent>
+                <motion.div 
+                  className="mt-6 p-6 glass-card rounded-2xl"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-foreground">Filter Expenses</h3>
+                    {getActiveFiltersCount() > 0 && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={clearFilters}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Clear All
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                        Category
+                      </label>
+                      <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                        <SelectTrigger className="glass-card border-0">
+                          <SelectValue placeholder="All Categories" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Categories</SelectItem>
+                          {expenseCategories.map((category) => (
+                            <SelectItem key={category.value} value={category.value}>
+                              {category.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                        Time Period
+                      </label>
+                      <Select value={dateFilter} onValueChange={setDateFilter}>
+                        <SelectTrigger className="glass-card border-0">
+                          <SelectValue placeholder="All Time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {dateFilters.map((filter) => (
+                            <SelectItem key={filter.value} value={filter.value}>
+                              {filter.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </motion.div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         </motion.header>
 
@@ -217,28 +498,13 @@ export default function OperationalExpenses() {
               <Card className="card-premium border-0 bg-gradient-to-br from-blue-50/80 to-white/80">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Monthly Expenses
+                    Total Expenses
                   </CardTitle>
-                  <DollarSign className="h-5 w-5 text-blue-600" />
+                  <Receipt className="h-5 w-5 text-blue-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">$24.0K</div>
-                  <p className="text-sm text-green-600 font-medium">-8.2% vs last month</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-yellow-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Pending Approval
-                  </CardTitle>
-                  <Clock className="h-5 w-5 text-yellow-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">$3.2K</div>
-                  <p className="text-sm text-yellow-600 font-medium">5 items pending</p>
+                  <div className="text-3xl font-bold text-gradient mb-2">{stats.totalExpenses}</div>
+                  <p className="text-sm text-muted-foreground">All time records</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -247,13 +513,15 @@ export default function OperationalExpenses() {
               <Card className="card-premium border-0 bg-gradient-to-br from-green-50/80 to-white/80">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Budget Utilization
+                    Monthly Total
                   </CardTitle>
-                  <PieChart className="h-5 w-5 text-green-600" />
+                  <DollarSign className="h-5 w-5 text-green-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">78.5%</div>
-                  <p className="text-sm text-green-600 font-medium">Within budget</p>
+                  <div className="text-3xl font-bold text-gradient mb-2">
+                    {stats.monthlyExpenses.toLocaleString('en-AE', { style: 'currency', currency: 'AED' })}
+                  </div>
+                  <p className="text-sm text-muted-foreground">This month</p>
                 </CardContent>
               </Card>
             </motion.div>
@@ -262,21 +530,39 @@ export default function OperationalExpenses() {
               <Card className="card-premium border-0 bg-gradient-to-br from-purple-50/80 to-white/80">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Cost Savings
+                    Average Amount
                   </CardTitle>
                   <TrendingUp className="h-5 w-5 text-purple-600" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">$2.1K</div>
-                  <p className="text-sm text-green-600 font-medium">This month</p>
+                  <div className="text-3xl font-bold text-gradient mb-2">
+                    {stats.avgExpenseAmount.toLocaleString('en-AE', { style: 'currency', currency: 'AED' })}
+                  </div>
+                  <p className="text-sm text-muted-foreground">Per expense</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div variants={fadeInUp} className="hover-lift">
+              <Card className="card-premium border-0 bg-gradient-to-br from-orange-50/80 to-white/80">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Categories
+                  </CardTitle>
+                  <PieChart className="h-5 w-5 text-orange-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-gradient mb-2">{categoryTotals.length}</div>
+                  <p className="text-sm text-muted-foreground">Active categories</p>
                 </CardContent>
               </Card>
             </motion.div>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-            {/* Expense Categories */}
+          {/* Category Breakdown */}
+          {categoryTotals.length > 0 && (
             <motion.div 
+              className="mb-12"
               {...fadeInUp}
               transition={{ delay: 0.4 }}
             >
@@ -298,200 +584,177 @@ export default function OperationalExpenses() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {expenseCategories.map((category, index) => (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {categoryTotals.map((category, index) => (
                       <motion.div 
-                        key={index}
-                        className="flex items-center justify-between"
+                        key={category.category}
+                        className="glass-card p-4 rounded-xl"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.5 + index * 0.1 }}
                       >
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-4 h-4 rounded-full ${category.color}`} />
-                          <span className="font-medium text-foreground">{category.category}</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-lg">{getCategoryIcon(category.category)}</span>
+                            <span className="font-medium text-foreground">
+                              {expenseCategories.find(c => c.value === category.category)?.label || category.category}
+                            </span>
+                          </div>
+                          <Badge className={getCategoryColor(category.category)} variant="outline">
+                            {category.count}
+                          </Badge>
                         </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-foreground">{category.amount}</p>
-                          <p className="text-sm text-muted-foreground">{category.percentage}%</p>
-                        </div>
+                        <p className="text-2xl font-bold text-gradient">
+                          {category.total.toLocaleString('en-AE', { style: 'currency', currency: 'AED' })}
+                        </p>
                       </motion.div>
                     ))}
                   </div>
                 </CardContent>
               </Card>
             </motion.div>
+          )}
 
-            {/* Budget Overview */}
-            <motion.div 
-              className="lg:col-span-2"
-              {...fadeInUp}
-              transition={{ delay: 0.6 }}
-            >
-              <Card className="card-premium border-0">
-                <CardHeader>
+          {/* Expenses List */}
+          <motion.div 
+            {...fadeInUp}
+            transition={{ delay: 0.6 }}
+          >
+            <Card className="card-premium border-0">
+              <CardHeader>
+                <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <motion.div
                       className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
                       whileHover={{ scale: 1.1, rotate: 10 }}
                     >
-                      <DollarSign className="w-4 h-4 text-white" />
+                      <Receipt className="w-4 h-4 text-white" />
                     </motion.div>
                     <div>
-                      <CardTitle>Budget Overview</CardTitle>
+                      <CardTitle className="text-xl">Expense Records</CardTitle>
                       <CardDescription>
-                        Department budget utilization
+                        {expenses.length} expense{expenses.length !== 1 ? 's' : ''} found
                       </CardDescription>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {budgetOverview.map((budget, index) => (
-                      <motion.div 
-                        key={index}
-                        className="glass-card p-4 rounded-xl"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.7 + index * 0.1 }}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-foreground">{budget.department}</h4>
-                          <Badge 
-                            className={`text-xs ${getUtilizationColor(budget.utilization) === 'text-red-600' ? 'bg-red-100 text-red-800' : 
-                              getUtilizationColor(budget.utilization) === 'text-yellow-600' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}
-                            variant="outline"
-                          >
-                            {budget.utilization}% used
-                          </Badge>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <p className="text-muted-foreground">Allocated</p>
-                            <p className="font-semibold text-foreground">{budget.allocated}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Spent</p>
-                            <p className="font-semibold text-foreground">{budget.spent}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Remaining</p>
-                            <p className="font-semibold text-green-600">{budget.remaining}</p>
-                          </div>
-                        </div>
-                        <div className="mt-3">
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className={`h-2 rounded-full ${budget.utilization >= 90 ? 'bg-red-500' : 
-                                budget.utilization >= 75 ? 'bg-yellow-500' : 'bg-green-500'}`}
-                              style={{ width: `${budget.utilization}%` }}
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-
-          {/* Expense List */}
-          <motion.div 
-            {...fadeInUp}
-            transition={{ delay: 0.8 }}
-          >
-            <Card className="card-premium border-0">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <motion.div
-                    className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                    whileHover={{ scale: 1.1, rotate: 10 }}
-                  >
-                    <Receipt className="w-4 h-4 text-white" />
-                  </motion.div>
-                  <div>
-                    <CardTitle className="text-xl">Recent Expenses</CardTitle>
-                    <CardDescription>
-                      Latest operational expense records
-                    </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {expenses.map((expense, index) => {
-                    const StatusIcon = getStatusIcon(expense.status);
-                    return (
+                {expenses.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Receipt className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-semibold text-muted-foreground mb-2">
+                      {getActiveFiltersCount() > 0 ? 'No expenses match your filters' : 'No expenses recorded yet'}
+                    </h3>
+                    <p className="text-muted-foreground mb-6">
+                      {getActiveFiltersCount() > 0 
+                        ? 'Try adjusting your search criteria or clear the filters.'
+                        : 'Start by recording your first operational expense.'
+                      }
+                    </p>
+                    {getActiveFiltersCount() > 0 ? (
+                      <Button variant="outline" onClick={clearFilters}>
+                        <X className="w-4 h-4 mr-2" />
+                        Clear Filters
+                      </Button>
+                    ) : (
+                      <Button onClick={() => setShowAddModal(true)} className="btn-premium">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add First Expense
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {expenses.map((expense, index) => (
                       <motion.div 
                         key={expense.id}
                         className="glass-card p-6 rounded-2xl hover-lift group"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.9 + index * 0.1 }}
+                        transition={{ delay: 0.7 + index * 0.1 }}
                         whileHover={{ scale: 1.02 }}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-4">
-                            <motion.div 
-                              className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center shadow-lg"
-                              whileHover={{ scale: 1.1, rotate: 10 }}
-                            >
-                              <StatusIcon className="w-6 h-6 text-white" />
-                            </motion.div>
+                            <Avatar className="w-12 h-12">
+                              <AvatarFallback className="gradient-primary text-white font-semibold">
+                                {getCategoryIcon(expense.category)}
+                              </AvatarFallback>
+                            </Avatar>
                             
-                            <div>
+                            <div className="flex-1">
                               <div className="flex items-center space-x-3 mb-1">
-                                <h3 className="font-semibold text-lg text-foreground">{expense.id}</h3>
+                                <h3 className="font-semibold text-lg text-foreground">{expense.description}</h3>
                                 <Badge 
-                                  className={`text-xs ${getStatusBg(expense.status)}`}
+                                  className={getCategoryColor(expense.category)}
                                   variant="outline"
                                 >
-                                  {expense.status}
-                                </Badge>
-                                <Badge variant="outline" className="text-xs">
-                                  {expense.category}
+                                  {expenseCategories.find(c => c.value === expense.category)?.label || expense.category}
                                 </Badge>
                               </div>
-                              <p className="text-sm font-medium text-foreground mb-1">{expense.description}</p>
                               <div className="flex items-center space-x-4 text-sm text-muted-foreground mb-2">
-                                <span>Vendor: {expense.vendor}</span>
+                                <div className="flex items-center space-x-1">
+                                  <Calendar className="w-4 h-4" />
+                                  <span>{new Date(expense.date).toLocaleDateString()}</span>
+                                </div>
                                 <span>•</span>
-                                <span>Department: {expense.department}</span>
-                                <span>•</span>
-                                <span>Date: {expense.date}</span>
+                                <span>ID: {expense.id.slice(-8)}</span>
                               </div>
-                              <p className="text-sm text-muted-foreground">Budget: {expense.budgetCategory}</p>
+                              {expense.notes && (
+                                <p className="text-sm text-muted-foreground">{expense.notes}</p>
+                              )}
                             </div>
                           </div>
                           
                           <div className="text-right">
                             <div className="mb-4">
                               <p className="text-sm text-muted-foreground">Amount</p>
-                              <p className="text-2xl font-bold text-gradient">{expense.amount}</p>
+                              <p className="text-2xl font-bold text-gradient">
+                                {expense.amount.toLocaleString('en-AE', { style: 'currency', currency: 'AED' })}
+                              </p>
                             </div>
                             
                             <div className="flex items-center space-x-2">
-                              <Button size="sm" className="btn-premium">
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Receipt
-                              </Button>
-                              <Button size="sm" variant="outline" className="glass-card border-0 hover-glow">
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit
+                              {expense.receipt && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="glass-card border-0 hover-glow"
+                                  onClick={() => window.open(expense.receipt, '_blank')}
+                                >
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Receipt
+                                </Button>
+                              )}
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="glass-card border-0 hover-glow text-red-600 hover:text-red-700"
+                                onClick={() => handleDeleteExpense(expense.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
                           </div>
                         </div>
                       </motion.div>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
         </main>
       </div>
+
+      {/* Add Expense Modal */}
+      <AddExpenseModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onExpenseCreated={fetchExpenses}
+        companyId={companyId}
+      />
     </div>
   );
 } 

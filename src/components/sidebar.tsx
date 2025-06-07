@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Building2,
@@ -27,14 +28,18 @@ import {
   Network,
   Activity,
   Contact,
-  Building
+  Building,
+  X,
+  LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useAuth } from "@/contexts/auth-context";
 
 interface SidebarItem {
   title: string;
@@ -55,7 +60,26 @@ const sidebarData: SidebarSection[] = [
   {
     title: "Users",
     isHighlighted: true,
-    items: [],
+    items: [
+      {
+        title: "User Management",
+        icon: Users,
+        href: "/users",
+      },
+    ],
+  },
+  {
+    title: "Companies",
+    items: [
+      {
+        title: "Companies",
+        icon: Building2,
+        children: [
+          { title: "Company Management", icon: Building2, href: "/companies" },
+          { title: "Employee Management", icon: Users, href: "/employees" },
+        ],
+      },
+    ],
   },
   {
     title: "ALBARQ",
@@ -303,16 +327,23 @@ interface CollapsibleMenuItemProps {
 function CollapsibleMenuItem({ item, level = 0 }: CollapsibleMenuItemProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const { close, isMobile, isTablet } = useSidebar();
   const hasChildren = item.children && item.children.length > 0;
   const isActive = pathname === item.href;
+
+  const handleLinkClick = () => {
+    if (isMobile || isTablet) {
+      close();
+    }
+  };
 
   if (!hasChildren) {
     return (
       <motion.div
-        whileHover={{ x: 4 }}
+        whileHover={{ x: isMobile ? 0 : 4 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
-        <Link href={item.href || "#"}>
+        <Link href={item.href || "#"} onClick={handleLinkClick}>
           <Button
             variant="ghost"
             className={cn(
@@ -321,7 +352,8 @@ function CollapsibleMenuItem({ item, level = 0 }: CollapsibleMenuItemProps) {
               "hover:bg-primary/10 hover:text-primary transition-all duration-300",
               "hover:shadow-lg hover:shadow-primary/10",
               "group relative overflow-hidden",
-              isActive && "bg-primary/10 text-primary shadow-lg shadow-primary/10"
+              isActive && "bg-primary/10 text-primary shadow-lg shadow-primary/10",
+              isMobile && "min-h-[48px] active:bg-primary/20" // Larger touch targets and active state
             )}
           >
             <div className={cn(
@@ -351,7 +383,7 @@ function CollapsibleMenuItem({ item, level = 0 }: CollapsibleMenuItemProps) {
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <CollapsibleTrigger asChild>
         <motion.div
-          whileHover={{ x: 4 }}
+          whileHover={{ x: isMobile ? 0 : 4 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
           <Button
@@ -361,7 +393,8 @@ function CollapsibleMenuItem({ item, level = 0 }: CollapsibleMenuItemProps) {
               level > 0 && "ml-6 text-sm",
               "hover:bg-primary/10 hover:text-primary transition-all duration-300",
               "hover:shadow-lg hover:shadow-primary/10",
-              "group relative overflow-hidden"
+              "group relative overflow-hidden",
+              isMobile && "min-h-[48px] active:bg-primary/20" // Larger touch targets and active state
             )}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -423,42 +456,115 @@ interface SidebarProps {
 }
 
 export function Sidebar({ className }: SidebarProps) {
-  const { isOpen } = useSidebar();
+  const { isOpen, close, isMobile, isTablet } = useSidebar();
+  const router = useRouter();
+  const { logout } = useAuth();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // Mobile overlay click handler
+  const handleOverlayClick = () => {
+    if (isMobile || isTablet) {
+      close();
+    }
+  };
+
+  // Logout handler
+  const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutConfirm(false);
+    logout();
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
 
   return (
+    <>
+      {/* Mobile/Tablet Overlay */}
+      <AnimatePresence>
+        {isOpen && (isMobile || isTablet) && (
+          <motion.div
+            className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={handleOverlayClick}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar */}
     <AnimatePresence mode="wait">
       {isOpen && (
         <motion.div 
-          className={cn("w-80 h-screen glass-sidebar overflow-y-auto sticky top-0 z-40", className)}
+            className={cn(
+              "h-screen glass-sidebar overflow-y-auto z-40",
+              isMobile || isTablet
+                ? "fixed left-0 top-0 w-80 max-w-[85vw]" 
+                : "sticky top-0 w-80",
+              className
+            )}
           initial={{ x: -320, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: -320, opacity: 0 }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
         >
+            {/* Mobile/Tablet Close Button */}
+            {(isMobile || isTablet) && (
+              <motion.div 
+                className="absolute top-4 right-4 z-50 lg:hidden"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={close}
+                  className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm hover:bg-white/20 active:bg-white/30"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </motion.div>
+            )}
+
           {/* Header */}
           <motion.div 
-            className="p-6 border-b border-border/30"
+              className={cn(
+                "p-4 sm:p-6 border-b border-border/30",
+                (isMobile || isTablet) && "pr-16" // Add padding for close button on mobile/tablet
+              )}
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <div className="flex items-center space-x-3">
+              <div className="flex items-center justify-center">
               <motion.div 
-                className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center shadow-lg"
-                whileHover={{ scale: 1.05, rotate: 5 }}
+                  className="relative"
+                  whileHover={{ scale: 1.05 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <TrendingUp className="w-6 h-6 text-white" />
+                  <Image
+                    src="/logo ele.png"
+                    alt="ELEVATE Investment Group"
+                    width={180}
+                    height={60}
+                    className="object-contain"
+                    priority
+                  />
               </motion.div>
-              <div>
-                <h1 className="text-xl font-bold text-gradient">ELEVATE</h1>
-                <p className="text-sm text-muted-foreground">Investment Group</p>
-              </div>
             </div>
           </motion.div>
 
           {/* Navigation */}
-          <div className="p-6 space-y-8">
+            <div className={cn(
+              "p-4 sm:p-6 space-y-6 sm:space-y-8",
+              (isMobile || isTablet) && "pb-20" // Extra padding at bottom for mobile/tablet
+            )}>
             {sidebarData.map((section, sectionIndex) => (
               <motion.div 
                 key={sectionIndex}
@@ -467,13 +573,13 @@ export function Sidebar({ className }: SidebarProps) {
                 transition={{ delay: 0.2 + sectionIndex * 0.05 }}
               >
                 {/* Section Header */}
-                <div className="mb-4">
+                  <div className="mb-3 sm:mb-4">
                   <motion.h2 
                     className={cn(
-                      "text-sm font-semibold tracking-wide uppercase",
+                        "text-xs sm:text-sm font-semibold tracking-wide uppercase",
                       section.isHighlighted 
-                        ? "text-white bg-gradient-primary px-4 py-2 rounded-xl shadow-lg" 
-                        : "text-muted-foreground px-4"
+                          ? "text-white bg-gradient-primary px-3 sm:px-4 py-2 rounded-xl shadow-lg" 
+                          : "text-muted-foreground px-3 sm:px-4"
                     )}
                     whileHover={section.isHighlighted ? { scale: 1.02 } : {}}
                     transition={{ type: "spring", stiffness: 300 }}
@@ -484,7 +590,7 @@ export function Sidebar({ className }: SidebarProps) {
 
                 {/* Section Items */}
                 {section.items.length > 0 && (
-                  <div className="space-y-2">
+                    <div className="space-y-1 sm:space-y-2">
                     {section.items.map((item, itemIndex) => (
                       <motion.div
                         key={itemIndex}
@@ -504,7 +610,7 @@ export function Sidebar({ className }: SidebarProps) {
                     initial={{ scaleX: 0 }}
                     animate={{ scaleX: 1 }}
                     transition={{ delay: 0.4 + sectionIndex * 0.05 }}
-                    className="mt-8"
+                      className="mt-6 sm:mt-8"
                   >
                     <Separator className="bg-gradient-to-r from-transparent via-border to-transparent" />
                   </motion.div>
@@ -515,11 +621,27 @@ export function Sidebar({ className }: SidebarProps) {
 
           {/* Footer */}
           <motion.div 
-            className="p-6 mt-auto border-t border-border/30"
+              className="p-4 sm:p-6 mt-auto border-t border-border/30"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.8 }}
           >
+            {/* Logout Button */}
+            <motion.div 
+              className="mb-4"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                className="w-full bg-red-50 hover:bg-red-100 border-red-200 hover:border-red-300 text-red-700 hover:text-red-800 transition-all duration-200"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            </motion.div>
+
             <div className="text-center">
               <p className="text-xs text-muted-foreground">
                 © 2024 ELEVATE Investment Group
@@ -532,5 +654,33 @@ export function Sidebar({ className }: SidebarProps) {
         </motion.div>
       )}
     </AnimatePresence>
+
+    {/* Logout Confirmation Dialog */}
+    <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center">
+            <LogOut className="w-5 h-5 mr-2 text-red-600" />
+            Confirm Logout
+          </DialogTitle>
+          <DialogDescription>
+            Are you sure you want to log out? You will be redirected to the login page.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end space-x-3 mt-6">
+          <Button variant="outline" onClick={cancelLogout}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={confirmLogout}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Logout
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 } 

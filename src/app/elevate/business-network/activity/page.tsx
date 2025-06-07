@@ -31,9 +31,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sidebar } from "@/components/sidebar";
-import { BurgerMenu } from "@/components/burger-menu";
+import { Header } from "@/components/header";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
+import { ImageUpload } from "@/components/ui/image-upload";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -53,14 +55,14 @@ const activityTypes = [
 ];
 
 export default function BusinessNetworkActivity() {
-  const { isOpen } = useSidebar();
+  const { isOpen, isMobile, isTablet, isDesktop } = useSidebar();
   const [isAddActivityOpen, setIsAddActivityOpen] = useState(false);
   const [selectedActivityType, setSelectedActivityType] = useState("");
   const [activityData, setActivityData] = useState({
     title: "",
     date: "",
     notes: "",
-    picture: null as File | null
+    picture: ""
   });
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,12 +107,12 @@ export default function BusinessNetworkActivity() {
         type: selectedActivityType as any,
         date: activityData.date,
         notes: activityData.notes || undefined,
-        picture: undefined // File upload will be implemented later
+        picture: activityData.picture || undefined
       });
 
       setIsAddActivityOpen(false);
       // Reset form
-      setActivityData({ title: "", date: "", notes: "", picture: null });
+      setActivityData({ title: "", date: "", notes: "", picture: "" });
       setSelectedActivityType("");
       
       // Refresh activities and stats
@@ -126,7 +128,7 @@ export default function BusinessNetworkActivity() {
   const handlePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setActivityData(prev => ({ ...prev, picture: file }));
+      setActivityData(prev => ({ ...prev, picture: URL.createObjectURL(file) }));
     }
   };
 
@@ -168,51 +170,100 @@ export default function BusinessNetworkActivity() {
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isOpen ? 'ml-0' : 'ml-0'}`}>
-        <motion.header 
-          className="glass-header sticky top-0 z-50"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          <div className="container mx-auto px-6 py-4">
-            <div className="flex items-center justify-between">
+      <div className={cn(
+        "flex-1 flex flex-col transition-all duration-300",
+        isDesktop && isOpen ? "ml-0" : "ml-0",
+        "min-w-0" // Prevent content overflow
+      )}>
+        <Header />
+
+        <main className="flex-1 container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-6">
               <motion.div 
-                className="flex items-center space-x-3"
+            className="mb-8"
                 {...fadeInUp}
-                transition={{ delay: 0.1 }}
-              >
-                <BurgerMenu />
-                <div className="flex items-center space-x-3">
-                  <motion.div
-                    className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center shadow-refined"
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  >
-                    <Activity className="w-4 h-4 text-white" />
-                  </motion.div>
-                  <div>
-                    <h1 className="text-xl font-elegant text-gradient">Network Activity</h1>
-                    <p className="text-sm text-muted-foreground font-refined">Recent Network Updates</p>
+          >
+            <h2 className="text-2xl font-prestigious text-gradient mb-2">
+              Activity Feed
+            </h2>
+            <p className="text-refined text-muted-foreground">
+              Track your business network activities and engagement.
+            </p>
+          </motion.div>
+
+          {/* Activity Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <motion.div {...fadeInUp} transition={{ delay: 0.1 }}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">Today's Activities</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gradient">
+                    {stats?.activities.today || 0}
                   </div>
+                </CardContent>
+              </Card>
+                  </motion.div>
+
+            <motion.div {...fadeInUp} transition={{ delay: 0.2 }}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">This Week</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gradient">
+                    {stats?.activities.week || 0}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div {...fadeInUp} transition={{ delay: 0.3 }}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">This Month</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gradient">
+                    {stats?.activities.month || 0}
                 </div>
+                </CardContent>
+              </Card>
               </motion.div>
               
+            <motion.div {...fadeInUp} transition={{ delay: 0.4 }}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium">Total Points</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gradient">
+                    {stats?.points.total || 0}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
+
+          {/* Action Bar */}
               <motion.div 
-                className="flex items-center space-x-3"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
+            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mb-6"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <Button variant="outline" className="border-refined">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Button variant="outline" className="border-refined text-xs sm:text-sm h-9 sm:h-10 px-3 sm:px-4">
+                <Filter className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Filter</span>
+                <span className="sm:hidden">Filter</span>
                 </Button>
                 <Dialog open={isAddActivityOpen} onOpenChange={setIsAddActivityOpen}>
                   <DialogTrigger asChild>
-                    <Button className="btn-premium">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Activity
+                  <Button className="btn-premium text-xs sm:text-sm h-9 sm:h-10 px-3 sm:px-4">
+                    <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Add Activity</span>
+                    <span className="sm:hidden">Add</span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[600px] glass-card border-refined">
@@ -291,24 +342,15 @@ export default function BusinessNetworkActivity() {
 
                       <div className="space-y-2">
                         <Label htmlFor="activity-picture" className="text-sm font-medium">Picture (Optional)</Label>
-                        <div className="flex items-center space-x-4">
-                          <Input
+                        <ImageUpload
                             id="activity-picture"
-                            type="file"
-                            accept="image/*"
-                            onChange={handlePictureUpload}
-                            className="border-refined"
-                          />
-                          <Button type="button" variant="outline" className="border-refined">
-                            <Camera className="w-4 h-4 mr-2" />
-                            Upload
-                          </Button>
-                        </div>
-                        {activityData.picture && (
-                          <p className="text-sm text-muted-foreground">
-                            Selected: {activityData.picture.name}
-                          </p>
-                        )}
+                          label="Activity Picture"
+                          value={activityData.picture}
+                          onChange={(value) => setActivityData(prev => ({ ...prev, picture: value || "" }))}
+                          placeholder="Upload activity picture"
+                          size="md"
+                          shape="square"
+                        />
                       </div>
 
                       {error && (
@@ -347,78 +389,8 @@ export default function BusinessNetworkActivity() {
                     </form>
                   </DialogContent>
                 </Dialog>
-              </motion.div>
             </div>
-          </div>
-        </motion.header>
-
-        <main className="flex-1 container mx-auto px-6 py-6">
-          <motion.div 
-            className="mb-8"
-            {...fadeInUp}
-          >
-            <h2 className="text-2xl font-prestigious text-gradient mb-2">
-              Activity Feed
-            </h2>
-            <p className="text-refined text-muted-foreground">
-              Track your business network activities and engagement.
-            </p>
           </motion.div>
-
-          {/* Activity Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <motion.div {...fadeInUp} transition={{ delay: 0.1 }}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">Today's Activities</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gradient">
-                    {stats?.activities.today || 0}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div {...fadeInUp} transition={{ delay: 0.2 }}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">This Week</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gradient">
-                    {stats?.activities.week || 0}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div {...fadeInUp} transition={{ delay: 0.3 }}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">This Month</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gradient">
-                    {stats?.activities.month || 0}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div {...fadeInUp} transition={{ delay: 0.4 }}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">Total Points</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gradient">
-                    {stats?.points.total || 0}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
 
           {/* Activities List */}
           <motion.div 
@@ -443,8 +415,16 @@ export default function BusinessNetworkActivity() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 * index }}
                       >
-                        <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                          {getActivityIcon(activity.type)}
+                        <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary overflow-hidden">
+                          {activity.picture ? (
+                            <img 
+                              src={activity.picture} 
+                              alt={`${activity.title} picture`}
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                          ) : (
+                            getActivityIcon(activity.type)
+                          )}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-start justify-between">

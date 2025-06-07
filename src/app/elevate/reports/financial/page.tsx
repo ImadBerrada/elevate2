@@ -44,6 +44,7 @@ import {
   Legend,
   ComposedChart
 } from 'recharts';
+import { cn } from "@/lib/utils";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -106,7 +107,7 @@ const kpiMetrics = [
 ];
 
 export default function FinancialReports() {
-  const { isOpen } = useSidebar();
+  const { isOpen, isMobile, isTablet, isDesktop } = useSidebar();
 
   const reportCategories = [
     {
@@ -155,63 +156,79 @@ export default function FinancialReports() {
     <div className="flex min-h-screen">
       <Sidebar />
       
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isOpen ? 'ml-0' : 'ml-0'}`}>
+      <div className={cn(
+        "flex-1 flex flex-col transition-all duration-300",
+        isDesktop && isOpen ? "ml-0" : "ml-0",
+        "min-w-0" // Prevent content overflow
+      )}>
         <motion.header 
-          className="glass-header sticky top-0 z-50"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          className={cn(
+            "glass-header sticky top-0 z-50 transition-all duration-300",
+            isOpen ? "opacity-0 -translate-y-full pointer-events-none" : "opacity-100 translate-y-0"
+          )}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ 
+            opacity: isOpen ? 0 : 1, 
+            y: isOpen ? -20 : 0 
+          }}
+          transition={{ duration: 0.4 }}
         >
-          <div className="container mx-auto px-8 py-6">
-            <div className="flex items-center justify-between">
+          <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <motion.div 
-                className="flex items-center space-x-4"
+                className="flex items-center space-x-2 sm:space-x-3"
                 {...fadeInUp}
-                transition={{ delay: 0.2 }}
+                transition={{ delay: 0.1 }}
               >
                 <BurgerMenu />
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2 sm:space-x-3">
                   <motion.div
-                    className="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center shadow-lg"
-                    whileHover={{ scale: 1.1, rotate: 10 }}
-                    transition={{ type: "spring", stiffness: 300 }}
+                    className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 gradient-primary rounded-lg flex items-center justify-center shadow-refined"
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
                   >
-                    <FileText className="w-5 h-5 text-white" />
+                    <FileText className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 text-white" />
                   </motion.div>
-                  <div>
-                    <h1 className="text-2xl font-bold text-gradient">Financial Intelligence Center</h1>
-                    <p className="text-sm text-muted-foreground">Advanced financial analysis and strategic reporting</p>
+                  <div className="hidden sm:block">
+                    <h1 className="text-lg sm:text-xl lg:text-2xl font-elegant text-gradient">Financial Intelligence Center</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground font-refined">Advanced financial analysis and strategic reporting</p>
+                  </div>
+                  <div className="sm:hidden">
+                    <h1 className="text-base font-elegant text-gradient">Financial Reports</h1>
                   </div>
                 </div>
               </motion.div>
               
               <motion.div 
-                className="flex items-center space-x-4"
-                initial={{ opacity: 0, x: 20 }}
+                className="flex flex-wrap items-center gap-2 sm:gap-3"
+                initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
+                transition={{ delay: 0.2 }}
               >
-                <Button variant="outline" className="glass-card border-0 hover-glow">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Period
+                <Button variant="outline" className="glass-card border-refined hover-glow text-xs sm:text-sm">
+                  <Calendar className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Period</span>
+                  <span className="sm:hidden">Period</span>
                 </Button>
-                <Button variant="outline" className="glass-card border-0 hover-glow">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
+                <Button variant="outline" className="glass-card border-refined hover-glow text-xs sm:text-sm">
+                  <Filter className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Filter</span>
+                  <span className="sm:hidden">Filter</span>
                 </Button>
-                <Button className="btn-premium">
-                  <Download className="w-4 h-4 mr-2" />
-                  Export Reports
+                <Button className="btn-premium text-xs sm:text-sm">
+                  <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Export Reports</span>
+                  <span className="sm:hidden">Export</span>
                 </Button>
               </motion.div>
             </div>
           </div>
         </motion.header>
 
-        <main className="flex-1 container mx-auto px-8 py-8">
+        <main className="flex-1 container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-6">
           {/* Enhanced Stats Cards */}
           <motion.div 
-            className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8"
             variants={staggerContainer}
             initial="initial"
             animate="animate"
