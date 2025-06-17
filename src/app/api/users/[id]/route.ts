@@ -7,11 +7,12 @@ import bcrypt from 'bcryptjs';
 // GET /api/users/[id] - Get user by ID (Admin only)
 export const GET = withRole(['ADMIN', 'SUPER_ADMIN'])(async (
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
+    const { id } = await params;
     const user = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       select: {
         id: true,
         email: true,
@@ -58,14 +59,16 @@ export const GET = withRole(['ADMIN', 'SUPER_ADMIN'])(async (
 // PUT /api/users/[id] - Update user (Admin only, or user updating themselves)
 export const PUT = withAuth(async (
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
+    
+    const { id } = await params;
     const body = await request.json();
     
     // Check if user is admin or updating themselves
     const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(request.user!.role);
-    const isSelf = request.user!.userId === params.id;
+    const isSelf = request.user!.userId === id;
     
     if (!isAdmin && !isSelf) {
       return NextResponse.json(
@@ -79,7 +82,7 @@ export const PUT = withAuth(async (
     
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
     
     if (!existingUser) {
@@ -123,7 +126,7 @@ export const PUT = withAuth(async (
     
     // Update user
     const user = await prisma.user.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
       select: {
         id: true,
@@ -172,12 +175,13 @@ export const PUT = withAuth(async (
 // DELETE /api/users/[id] - Delete user (Admin only)
 export const DELETE = withRole(['ADMIN', 'SUPER_ADMIN'])(async (
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
+    const { id } = await params;
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id: id },
     });
     
     if (!existingUser) {
@@ -188,7 +192,7 @@ export const DELETE = withRole(['ADMIN', 'SUPER_ADMIN'])(async (
     }
     
     // Prevent self-deletion
-    if (request.user!.userId === params.id) {
+    if (request.user!.userId === id) {
       return NextResponse.json(
         { error: 'Cannot delete your own account' },
         { status: 400 }
@@ -197,7 +201,7 @@ export const DELETE = withRole(['ADMIN', 'SUPER_ADMIN'])(async (
     
     // Delete user (this will cascade delete related records)
     await prisma.user.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
     
     return NextResponse.json({ message: 'User deleted successfully' });

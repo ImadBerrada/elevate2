@@ -146,6 +146,15 @@ export function AddDriverModal({ isOpen, onClose, onDriverCreated, companyId }: 
       });
 
       if (response.ok) {
+        const responseData = await response.json();
+        console.log('Driver created successfully:', responseData);
+        
+        // Show success message mentioning both driver and employee creation
+        if (responseData.message) {
+          // You could show a toast notification here if you have a toast system
+          console.log('Success:', responseData.message);
+        }
+        
         onDriverCreated();
         onClose();
         resetForm();

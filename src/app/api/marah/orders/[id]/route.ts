@@ -18,11 +18,12 @@ const updateOrderSchema = z.object({
 
 async function getHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const order = await prisma.marahOrder.findUnique({
-      where: { id: params.id },
+    
+    const { id } = await params;const order = await prisma.marahOrder.findUnique({
+      where: { id: id },
       include: {
         customer: {
           include: {
@@ -65,15 +66,16 @@ async function getHandler(
 
 async function putHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const body = await request.json();
+    
+    const { id } = await params;const body = await request.json();
     const validatedData = updateOrderSchema.parse(body);
 
     // Get the order first to verify ownership
     const existingOrder = await prisma.marahOrder.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -110,7 +112,7 @@ async function putHandler(
 
     // Update the order
     const updatedOrder = await prisma.marahOrder.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...validatedData,
         updatedAt: new Date(),
@@ -154,12 +156,13 @@ async function putHandler(
 
 async function deleteHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Get the order first to verify ownership
+    
+    const { id } = await params;// Get the order first to verify ownership
     const existingOrder = await prisma.marahOrder.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -180,17 +183,17 @@ async function deleteHandler(
 
     // Delete order items first (due to foreign key constraints)
     await prisma.marahOrderItem.deleteMany({
-      where: { orderId: params.id },
+      where: { orderId: id },
     });
 
     // Delete payments
     await prisma.marahPayment.deleteMany({
-      where: { orderId: params.id },
+      where: { orderId: id },
     });
 
     // Delete the order
     await prisma.marahOrder.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ message: 'Order deleted successfully' });

@@ -23,6 +23,7 @@ model User {
   lastName  String
   avatar    String?
   role      UserRole @default(USER)
+  assignedCompanyId String? // For direct company assignment
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -34,6 +35,18 @@ model User {
   companies  Company[]
   employees  Employee[]
   assetTypes AssetType[]
+  managerAssignments ManagerAssignment[]
+  accessLogs PlatformAccessLog[]
+  
+  // Assigned company relation
+  assignedCompany Company? @relation("AssignedCompany", fields: [assignedCompanyId], references: [id], onDelete: SetNull)
+
+  // Real Estate Relations
+  propertyOwners PropertyOwner[]
+
+  // Investor Relations
+  investors Investor[]
+  investorCommunications InvestorCommunication[]
 
   @@map("users")
 }
@@ -69,6 +82,8 @@ model Company {
   employees Employee[]
   actualEmployees Employee[] @relation("ActualCompany")
   assets    CompanyAsset[]
+  assignedManagers User[] @relation("AssignedCompany")
+  managerAssignments ManagerAssignment[]
   
   // Marah Relations
   marahCustomers       MarahCustomer[]       @relation("MarahCustomers")
@@ -88,6 +103,8 @@ model Employee {
   id         String         @id @default(cuid())
   firstName  String
   lastName   String
+  firstNameArabic String?
+  lastNameArabic  String?
   email      String         @unique
   phone      String?
   position   String
@@ -254,6 +271,7 @@ model Employer {
 enum UserRole {
   USER
   ADMIN
+  MANAGER
   SUPER_ADMIN
 }
 
@@ -706,4 +724,770 @@ enum MarahCustomerType {
   VIP
   PREMIUM
   CORPORATE
+  INDIVIDUAL
+  BUSINESS
+}
+
+// ========================================
+// REAL ESTATE MANAGEMENT SYSTEM MODELS
+// ========================================
+
+// Property Owner model
+model PropertyOwner {
+  id        String   @id @default(cuid())
+  firstName String
+  lastName  String
+  email     String   @unique
+  phone     String
+  address   String?
+  city      String?
+  country   String?
+  notes     String?
+  avatar    String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  properties Property[]
+
+  @@map("property_owners")
+}
+
+// Property Type model
+model PropertyType {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g., "Apartment", "House", "Commercial", "Villa"
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  properties Property[]
+
+  @@map("property_types")
+}
+
+// Property model
+model Property {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  address       String
+  city          String
+  area          String?
+  country       String    @default("UAE")
+  floorArea     Float?    // in sqft
+  lotArea       Float?    // in sqft
+  purchaseValue Decimal?  @db.Decimal(15, 2)
+  purchaseDate  DateTime?
+  propertyTypeId String
+  ownerId       String
+  notes         String?
+  status        PropertyStatus @default(ACTIVE)
+  occupancyRate Float?    @default(0) // 0-100%
+  // Financial and occupancy management fields
+  expectedMonthlyRent   Decimal? @db.Decimal(10, 2)
+  expectedAnnualExpenses Decimal? @db.Decimal(10, 2)
+  totalUnits           Int?     @default(0)
+  occupiedUnits        Int?     @default(0)
+  // Property image
+  image         String?   // URL or file path to property image
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  propertyType    PropertyType         @relation(fields: [propertyTypeId], references: [id])
+  owner           PropertyOwner        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  rentalUnits     PropertyRentalUnit[]
+  expenses        PropertyExpense[]
+  appliances      PropertyAppliance[]
+  attachments     PropertyAttachment[]
+  agreements      TenantAgreement[]
+  maintenanceRequests MaintenanceRequest[]
+
+  @@map("properties")
+}
+
+// Rental Unit Type model
+model RentalUnitType {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g., "Studio", "1BR", "2BR", "3BR", "Penthouse"
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  rentalUnits PropertyRentalUnit[]
+
+  @@map("rental_unit_types")
+}
+
+// Property Rental Unit model
+model PropertyRentalUnit {
+  id             String    @id @default(cuid())
+  unitNumber     String    // e.g., "101", "A-1", "Ground Floor"
+  unitTypeId     String
+  propertyId     String
+  area           Float?    // in sqft
+  bedrooms       Int?      @default(0)
+  bathrooms      Int?      @default(0)
+  parkingSpots   Int?      @default(0)
+  rentAmount     Decimal   @db.Decimal(10, 2)
+  securityDeposit Decimal? @db.Decimal(10, 2)
+  status         RentalUnitStatus @default(VACANT)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  property    Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unitType    RentalUnitType    @relation(fields: [unitTypeId], references: [id])
+  agreements  TenantAgreement[]
+
+  @@unique([propertyId, unitNumber])
+  @@map("property_rental_units")
+}
+
+// Tenant model
+model Tenant {
+  id          String   @id @default(cuid())
+  firstName   String
+  lastName    String
+  email       String   @unique
+  phone       String
+  alternatePhone String?
+  nationality String?
+  passportNumber String?
+  emiratesId  String?
+  occupation  String?
+  company     String?
+  monthlyIncome Decimal? @db.Decimal(10, 2)
+  notes       String?
+  avatar      String?
+  status      TenantStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  agreements TenantAgreement[]
+
+  @@map("tenants")
+}
+
+// Tenant Agreement model
+model TenantAgreement {
+  id               String    @id @default(cuid())
+  agreementNumber  String    @unique // AGT-XXXXXX format
+  propertyId       String
+  rentalUnitId     String
+  tenantId         String
+  startDate        DateTime
+  endDate          DateTime
+  rentAmount       Decimal   @db.Decimal(10, 2)
+  securityDeposit  Decimal?  @db.Decimal(10, 2)
+  commissionAmount Decimal?  @db.Decimal(10, 2)
+  paymentDueDate   Int       @default(1) // Day of month (1-31)
+  paymentFrequency PaymentFrequency @default(MONTHLY)
+  utilities        String?   // JSON string of utilities included
+  terms            String?   // Agreement terms and conditions
+  notes            String?
+  status           AgreementStatus @default(ACTIVE)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  property    Property           @relation(fields: [propertyId], references: [id])
+  rentalUnit  PropertyRentalUnit @relation(fields: [rentalUnitId], references: [id])
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  invoices    RealEstateInvoice[]
+  payments    TenantPayment[]
+
+  @@map("tenant_agreements")
+}
+
+// Payment Method model
+model PaymentMethod {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g., "Cash", "Bank Transfer", "Credit Card", "Cheque"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tenantPayments TenantPayment[]
+
+  @@map("payment_methods")
+}
+
+// Tenant Payment model
+model TenantPayment {
+  id              String    @id @default(cuid())
+  agreementId     String
+  amount          Decimal   @db.Decimal(10, 2)
+  paymentDate     DateTime
+  paymentMethodId String
+  referenceNumber String?   // Bank reference, cheque number, etc.
+  notes           String?
+  isTaxable       Boolean   @default(true)
+  receiptNumber   String?   @unique
+  status          PaymentStatus @default(COMPLETED)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  agreement     TenantAgreement @relation(fields: [agreementId], references: [id])
+  paymentMethod PaymentMethod   @relation(fields: [paymentMethodId], references: [id])
+
+  @@map("tenant_payments")
+}
+
+// Real Estate Invoice model
+model RealEstateInvoice {
+  id           String    @id @default(cuid())
+  invoiceNumber String   @unique // INV-XXXXXX format
+  agreementId  String
+  amount       Decimal   @db.Decimal(10, 2)
+  dueDate      DateTime
+  issueDate    DateTime  @default(now())
+  description  String?
+  taxAmount    Decimal?  @db.Decimal(10, 2)
+  totalAmount  Decimal   @db.Decimal(10, 2)
+  notes        String?
+  status       InvoiceStatus @default(PENDING)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  agreement TenantAgreement @relation(fields: [agreementId], references: [id])
+
+  @@map("real_estate_invoices")
+}
+
+// Property Expense model
+model PropertyExpense {
+  id              String    @id @default(cuid())
+  propertyId      String
+  category        ExpenseCategory
+  description     String
+  amount          Decimal   @db.Decimal(10, 2)
+  expenseDate     DateTime
+  vendor          String?
+  invoiceNumber   String?
+  isTaxDeductible Boolean   @default(false)
+  isRecurring     Boolean   @default(false)
+  includeInTenantInvoice Boolean @default(false)
+  notes           String?
+  receiptDocument String? // Base64 or file path
+  status          ExpenseStatus @default(APPROVED)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_expenses")
+}
+
+// Property Appliance model
+model PropertyAppliance {
+  id               String    @id @default(cuid())
+  propertyId       String
+  name             String    // e.g., "AC Unit 1", "Refrigerator", "Washing Machine"
+  brand            String?
+  model            String?
+  serialNumber     String?
+  purchaseDate     DateTime?
+  purchasePrice    Decimal?  @db.Decimal(10, 2)
+  warrantyExpiry   DateTime?
+  installationDate DateTime?
+  condition        ApplianceCondition @default(GOOD)
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_appliances")
+}
+
+// Property Attachment model
+model PropertyAttachment {
+  id          String    @id @default(cuid())
+  propertyId  String
+  fileName    String
+  fileType    AttachmentType
+  fileSize    Int?      // in bytes
+  filePath    String    // Base64 or file path
+  description String?
+  uploadedAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_attachments")
+}
+
+// ========================================
+// REAL ESTATE ENUMS
+// ========================================
+
+enum PropertyStatus {
+  ACTIVE
+  INACTIVE
+  UNDER_RENOVATION
+  FOR_SALE
+}
+
+enum RentalUnitStatus {
+  VACANT
+  OCCUPIED
+  MAINTENANCE
+  RESERVED
+}
+
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+}
+
+enum AgreementStatus {
+  ACTIVE
+  EXPIRED
+  TERMINATED
+  PENDING
+}
+
+enum PaymentFrequency {
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUALLY
+  ANNUALLY
+}
+
+enum PaymentStatus {
+  COMPLETED
+  PENDING
+  FAILED
+  REFUNDED
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum ExpenseCategory {
+  MAINTENANCE
+  UTILITIES
+  INSURANCE
+  TAXES
+  MANAGEMENT_FEES
+  REPAIRS
+  CLEANING
+  LANDSCAPING
+  SECURITY
+  OTHER
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApplianceCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  NEEDS_REPLACEMENT
+}
+
+enum AttachmentType {
+  IMAGE
+  DOCUMENT
+  VIDEO
+  FLOOR_PLAN
+  CONTRACT
+  INVOICE
+  OTHER
+}
+
+// Maintenance Request model for property maintenance management
+model MaintenanceRequest {
+  id              String                @id @default(cuid())
+  propertyId      String
+  title           String
+  description     String
+  priority        MaintenancePriority   @default(MEDIUM)
+  status          MaintenanceStatus     @default(PENDING)
+  category        MaintenanceCategory   @default(OTHER)
+  unitNumber      String?
+  estimatedCost   Decimal?
+  actualCost      Decimal?
+  assignedTo      String?
+  requestDate     String                // ISO date string
+  completionDate  String?               // ISO date string
+  tenantContact   Json?                 // JSON object for tenant contact details
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("maintenance_requests")
+}
+
+enum MaintenancePriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum MaintenanceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MaintenanceCategory {
+  PLUMBING
+  ELECTRICAL
+  HVAC
+  CLEANING
+  PAINTING
+  APPLIANCE
+  SECURITY
+  OTHER
+}
+
+// ========================================
+// INVESTOR MODELS
+// ========================================
+
+// Investor model for managing investor relationships
+model Investor {
+  id                String             @id @default(cuid())
+  name              String
+  type              InvestorType
+  investment        Float
+  stake             Float
+  joinDate          DateTime
+  status            InvestorStatus     @default(ACTIVE)
+  headquarters      String?
+  website           String?
+  fundSize          Float?
+  investmentFocus   String[]
+  lastCommunication DateTime?
+  nextMeeting       DateTime?
+  performanceRating Float?             @default(0)
+  riskProfile       RiskProfile        @default(MEDIUM)
+  notes             String?
+  userId            String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  // Contact information
+  contact           InvestorContact?
+  
+  // Relations
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communications    InvestorCommunication[]
+
+  @@map("investors")
+}
+
+// Investor contact information
+model InvestorContact {
+  id              String   @id @default(cuid())
+  investorId      String   @unique
+  email           String
+  phone           String?
+  primaryContact  String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  investor        Investor @relation(fields: [investorId], references: [id], onDelete: Cascade)
+
+  @@map("investor_contacts")
+}
+
+// Investor communications tracking
+model InvestorCommunication {
+  id          String                    @id @default(cuid())
+  investorId  String
+  type        CommunicationType
+  subject     String
+  content     String?
+  date        DateTime                  @default(now())
+  status      CommunicationStatus       @default(SENT)
+  priority    CommunicationPriority     @default(MEDIUM)
+  userId      String
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  // Relations
+  investor    Investor                  @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("investor_communications")
+}
+
+// ========================================
+// INVESTOR ENUMS
+// ========================================
+
+enum InvestorType {
+  INSTITUTIONAL
+  PRIVATE_EQUITY
+  VENTURE_CAPITAL
+  ANGEL
+  FAMILY_OFFICE
+  SOVEREIGN_WEALTH
+}
+
+enum InvestorStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  EXITED
+}
+
+enum RiskProfile {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CommunicationType {
+  EMAIL
+  MEETING
+  CALL
+  REPORT
+  PROPOSAL
+}
+
+enum CommunicationStatus {
+  SENT
+  RECEIVED
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum CommunicationPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ========================================
+// MANAGER ASSIGNMENT MODELS
+// ========================================
+
+// Manager assignment model for managing company-manager relationships
+model ManagerAssignment {
+  id          String   @id @default(cuid())
+  userId      String
+  companyId   String
+  platforms   String[] // Array of platform names the manager can access
+  permissions Json     // JSON object containing detailed permissions
+  isActive    Boolean  @default(true)
+  assignedBy  String?  // User ID of who assigned this manager
+  assignedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Unique constraint to prevent duplicate assignments
+  @@unique([userId, companyId])
+  @@map("manager_assignments")
+}
+
+// Platform access log model for tracking manager access
+model PlatformAccessLog {
+  id          String   @id @default(cuid())
+  userId      String
+  companyId   String
+  platform    String   // Platform name (e.g., "marah", "real-estate", "employees")
+  action      String   // Action performed (e.g., "login", "view", "edit", "delete")
+  ipAddress   String?
+  userAgent   String?
+  accessedAt  DateTime @default(now())
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("platform_access_logs")
+}
+
+// ========================================
+// BRIDGE RETREATS MODELS
+// ========================================
+
+// Retreat model for managing retreat programs
+model Retreat {
+  id                  String        @id @default(cuid())
+  title               String
+  description         String
+  type                RetreatType
+  status              RetreatStatus @default(DRAFT)
+  duration            Int           // Duration in days
+  capacity            Int
+  price               Float
+  startDate           DateTime
+  endDate             DateTime
+  location            String
+  instructor          String
+  amenities           String[]      // Array of amenities
+  requirements        String[]      // Array of requirements
+  inclusions          String[]      // What's included
+  exclusions          String[]      // What's not included
+  cancellationPolicy  String?
+  specialInstructions String?
+  images              String[]      // Array of image URLs
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  // Relations
+  activities RetreatActivity[]
+  bookings   RetreatBooking[]
+  reviews    RetreatReview[]
+
+  @@map("retreats")
+}
+
+// Retreat activity model for managing activities within retreats
+model RetreatActivity {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  duration    Int      // Duration in minutes
+  instructor  String?
+  capacity    Int?
+  equipment   String[] // Required equipment
+  retreatId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  retreat Retreat @relation(fields: [retreatId], references: [id], onDelete: Cascade)
+
+  @@map("retreat_activities")
+}
+
+// Guest model for managing retreat guests
+model RetreatGuest {
+  id          String      @id @default(cuid())
+  firstName   String
+  lastName    String
+  email       String      @unique
+  phone       String?
+  dateOfBirth DateTime?
+  nationality String?
+  address     String?
+  emergencyContact String?
+  emergencyPhone   String?
+  dietaryRestrictions String[]
+  medicalConditions   String[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  bookings RetreatBooking[]
+  reviews  RetreatReview[]
+
+  @@map("retreat_guests")
+}
+
+// Booking model for managing retreat bookings
+model RetreatBooking {
+  id              String        @id @default(cuid())
+  retreatId       String
+  guestId         String
+  status          RetreatBookingStatus @default(PENDING)
+  checkInDate     DateTime
+  checkOutDate    DateTime
+  numberOfGuests  Int           @default(1)
+  totalAmount     Float
+  paidAmount      Float         @default(0)
+  paymentMethod   String?
+  paymentStatus   RetreatPaymentStatus @default(PENDING)
+  specialRequests String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  retreat Retreat      @relation(fields: [retreatId], references: [id], onDelete: Cascade)
+  guest   RetreatGuest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@map("retreat_bookings")
+}
+
+// Review model for managing retreat reviews
+model RetreatReview {
+  id        String   @id @default(cuid())
+  retreatId String
+  guestId   String
+  rating    Int      // 1-5 rating
+  title     String?
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  retreat Retreat      @relation(fields: [retreatId], references: [id], onDelete: Cascade)
+  guest   RetreatGuest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@unique([retreatId, guestId]) // One review per guest per retreat
+  @@map("retreat_reviews")
+}
+
+// ========================================
+// BRIDGE RETREATS ENUMS
+// ========================================
+
+enum RetreatType {
+  WELLNESS
+  CORPORATE
+  SPIRITUAL
+  ADVENTURE
+  EDUCATIONAL
+}
+
+enum RetreatStatus {
+  DRAFT
+  ACTIVE
+  FULL
+  ARCHIVED
+}
+
+enum RetreatBookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  WAITLISTED
+}
+
+enum RetreatPaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  REFUNDED
 }

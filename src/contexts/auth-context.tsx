@@ -68,10 +68,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Set user data from login response
       setUser(response.user);
+      
+      // Store user data in localStorage for persistence
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user_data', JSON.stringify(response.user));
+      }
+      
       setIsLoading(false);
       
-      // Redirect to dashboard after successful login
-      router.push('/dashboard');
+      // Redirect based on user role
+      if (response.user.role === 'MANAGER') {
+        router.push('/manager-dashboard');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (error) {
       setIsLoading(false);
       throw error;
@@ -81,6 +91,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     apiClient.logout();
     setUser(null);
+    
+    // Clear user data from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('user_data');
+    }
+    
     router.push('/login');
   };
 
@@ -88,16 +104,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check if we have a token and try to restore user session
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('auth_token');
-      if (token) {
-        // For now, we'll just mark as authenticated
-        // In a real app, you'd fetch user data from the server
-        setUser({
-          id: 'temp-id',
-          email: 'user@example.com',
-          firstName: 'User',
-          lastName: 'Name',
-          role: 'USER'
-        });
+      const userData = localStorage.getItem('user_data');
+      
+      if (token && userData) {
+        try {
+          const parsedUser = JSON.parse(userData);
+          setUser(parsedUser);
+        } catch (error) {
+          console.error('Failed to parse user data:', error);
+          // Clear invalid data
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_data');
+        }
       }
     }
     setIsLoading(false);

@@ -24,10 +24,10 @@ const driverSchema = z.object({
   vehicleDocument: z.string().optional(),
   companyId: z.string().min(1, 'Company ID is required'),
   
-  // Employee fields that we'll accept but not save to MarahDriver
-  department: z.string().optional(),
-  startDate: z.string().optional(),
-  role: z.string().optional(),
+  // Employee fields that we'll use to create Employee record
+  department: z.string().min(1, 'Department is required'),
+  startDate: z.string().min(1, 'Start date is required'),
+  role: z.string().min(1, 'Role is required'),
   employerId: z.string().optional(),
   actualSalary: z.string().optional(),
   location: z.string().optional(),
@@ -153,7 +153,7 @@ async function postHandler(request: AuthenticatedRequest) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    // Check if phone number already exists
+    // Check if phone number already exists for driver
     const existingDriver = await prisma.marahDriver.findFirst({
       where: {
         phone: validatedData.phone,
@@ -167,27 +167,77 @@ async function postHandler(request: AuthenticatedRequest) {
       }, { status: 409 });
     }
 
-    // Extract only fields that exist in MarahDriver model
-    const {
-      department, startDate, role, employerId, actualSalary, location, manager, skills, employeeStatus,
-      ...driverData
-    } = validatedData;
+    // Check if email already exists for employee (if email is provided)
+    if (validatedData.email) {
+      const existingEmployee = await prisma.employee.findFirst({
+        where: {
+          email: validatedData.email,
+        },
+      });
 
-    const driver = await prisma.marahDriver.create({
-      data: {
-        ...driverData,
-        email: driverData.email || null,
-        totalOrders: 0,
-        completedOrders: 0,
-        activeOrders: 0,
-        totalRevenue: 0,
-        completionRate: 0,
-        rating: 0,
-        totalRatings: 0,
-      },
+      if (existingEmployee) {
+        return NextResponse.json({ 
+          error: 'Email already exists', 
+          message: `An employee with email ${validatedData.email} already exists. Please use a different email.` 
+        }, { status: 409 });
+      }
+    }
+
+    // Use transaction to create both driver and employee records
+    const result = await prisma.$transaction(async (tx) => {
+      // Extract driver-specific fields
+      const {
+        department, startDate, role, employerId, actualSalary, location, manager, skills, employeeStatus,
+        name, ...driverData
+      } = validatedData;
+
+      // Create the driver record
+      const driver = await tx.marahDriver.create({
+        data: {
+          ...driverData,
+          name,
+          email: driverData.email || null,
+          totalOrders: 0,
+          completedOrders: 0,
+          activeOrders: 0,
+          totalRevenue: 0,
+          completionRate: 0,
+          rating: 0,
+          totalRatings: 0,
+        },
+      });
+
+      // Create the employee record
+      const employee = await tx.employee.create({
+        data: {
+          firstName: name.split(' ')[0] || name,
+          lastName: name.split(' ').slice(1).join(' ') || '',
+          email: validatedData.email || '',
+          phone: validatedData.phone,
+          position: role,
+          department: department,
+          salary: validatedData.salary?.toString() || null,
+          actualSalary: actualSalary || null,
+          startDate: new Date(startDate),
+          status: employeeStatus || 'ACTIVE',
+          location: location || null,
+          manager: manager || null,
+          skills: skills,
+          avatar: validatedData.profilePicture || null,
+          companyId: validatedData.companyId,
+          userId: request.user!.userId,
+        },
+      });
+
+      return { driver, employee };
     });
 
-    return NextResponse.json(driver, { status: 201 });
+    return NextResponse.json({
+      driver: result.driver,
+      employee: result.employee,
+      message: 'Driver created successfully and added to employee management'
+    }, { status: 201 });
+
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid data', details: error.errors }, { status: 400 });

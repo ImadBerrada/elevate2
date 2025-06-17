@@ -28,13 +28,11 @@ export const GET = withRole(['ADMIN', 'SUPER_ADMIN'])(async (request: Authentica
 
     // Add role filter - map frontend roles to database roles
     if (role && role !== 'ALL') {
-      if (role === 'MANAGER') {
-        // Since MANAGER doesn't exist in DB, we'll treat it as ADMIN for now
-        whereClause.role = 'ADMIN';
-      } else if (role === 'VIEWER') {
+      if (role === 'VIEWER') {
         // Since VIEWER doesn't exist in DB, we'll treat it as USER for now
         whereClause.role = 'USER';
       } else {
+        // MANAGER now exists in DB, so we can use it directly
         whereClause.role = role;
       }
     }
@@ -73,8 +71,8 @@ export const GET = withRole(['ADMIN', 'SUPER_ADMIN'])(async (request: Authentica
       position: '',
       location: '',
       lastLogin: user.updatedAt.toISOString(), // Use updatedAt as lastLogin for now
-      // Map database roles to frontend roles
-      role: user.role === 'SUPER_ADMIN' ? 'ADMIN' : user.role,
+      // Keep the database role as is since we now support MANAGER
+      role: user.role,
     }));
 
     return NextResponse.json({

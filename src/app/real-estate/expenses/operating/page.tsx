@@ -1,6 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
   Receipt, 
   TrendingUp, 
@@ -14,13 +16,21 @@ import {
   Eye,
   Edit,
   Building,
-  PieChart
+  PieChart,
+  Home,
+  ChevronRight,
+  ExternalLink,
+  ArrowLeft
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sidebar } from "@/components/sidebar";
+import { BurgerMenu } from "@/components/burger-menu";
+import { useSidebar } from "@/contexts/sidebar-context";
+import { cn } from "@/lib/utils";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -36,7 +46,67 @@ const staggerContainer = {
   }
 };
 
-export default function OperatingExpenses() {
+function OperatingExpensesContent() {
+  const { isOpen, isMobile, isTablet, isDesktop } = useSidebar();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [propertyFilter, setPropertyFilter] = useState("all");
+
+  useEffect(() => {
+    // Handle URL parameters for navigation context
+    const fromParam = searchParams.get('from');
+    const successParam = searchParams.get('success');
+    const propertyParam = searchParams.get('property');
+    const expenseParam = searchParams.get('expense');
+    
+    if (successParam) {
+      setSuccess(successParam);
+      setTimeout(() => setSuccess(null), 5000);
+    }
+    
+    if (fromParam) {
+      setSuccess(`Navigated from ${fromParam} module`);
+      setTimeout(() => setSuccess(null), 4000);
+    }
+
+    if (propertyParam) {
+      setSuccess(`Viewing operating expenses for ${propertyParam}`);
+      setTimeout(() => setSuccess(null), 4000);
+    }
+
+    if (expenseParam) {
+      setSuccess(`Viewing operating expense ${expenseParam}`);
+      setTimeout(() => setSuccess(null), 4000);
+    }
+  }, [searchParams]);
+
+  const navigateToModule = (module: string, params?: Record<string, string>) => {
+    const queryParams = new URLSearchParams(params);
+    queryParams.set('from', 'expenses-operating');
+    router.push(`/real-estate/${module}?${queryParams}`);
+  };
+
+  const handleViewProperty = (propertyName: string) => {
+    navigateToModule('properties/management', { 
+      success: 'Viewing property details from operating expenses',
+      property: propertyName 
+    });
+  };
+
+  const handleBackToExpenses = () => {
+    navigateToModule('expenses', { 
+      success: 'Returned from operating expenses'
+    });
+  };
+
   const expenses = [
     {
       id: "OPX-001",
@@ -148,173 +218,383 @@ export default function OperatingExpenses() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
       
-      <div className="flex-1 flex flex-col">
+      <div className={cn(
+        "flex-1 flex flex-col transition-all duration-300",
+        isDesktop && isOpen ? "ml-0" : "ml-0",
+        "min-w-0"
+      )}>
         <motion.header 
-          className="glass-header sticky top-0 z-50"
+          className={cn(
+            "glass-header sticky top-0 z-50 transition-all duration-300",
+            isOpen ? "opacity-0 -translate-y-full pointer-events-none" : "opacity-100 translate-y-0"
+          )}
           initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{ 
+            opacity: isOpen ? 0 : 1, 
+            y: isOpen ? -20 : 0 
+          }}
           transition={{ duration: 0.5 }}
         >
-          <div className="container mx-auto px-8 py-6">
+          <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
             <div className="flex items-center justify-between">
               <motion.div 
-                className="flex items-center space-x-4"
+                className="flex items-center space-x-2 sm:space-x-3"
                 {...fadeInUp}
                 transition={{ delay: 0.2 }}
               >
-                <div className="flex items-center space-x-3">
+                <BurgerMenu />
+                <div className="flex items-center space-x-2 sm:space-x-3">
                   <motion.div
-                    className="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center shadow-lg"
+                    className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 gradient-primary rounded-lg flex items-center justify-center shadow-refined"
                     whileHover={{ scale: 1.1, rotate: 10 }}
                     transition={{ type: "spring", stiffness: 300 }}
                   >
-                    <Receipt className="w-5 h-5 text-white" />
+                    <Receipt className="w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 text-white" />
                   </motion.div>
-                  <div>
-                    <h1 className="text-2xl font-bold text-gradient">Operating Expenses</h1>
-                    <p className="text-sm text-muted-foreground">Property operational cost management</p>
+                  <div className="hidden sm:block">
+                    <h1 className="text-lg sm:text-xl font-elegant text-gradient">Operating Expenses</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground font-refined">Property operational cost management</p>
+                  </div>
+                  <div className="sm:hidden">
+                    <h1 className="text-base font-elegant text-gradient">Operating</h1>
                   </div>
                 </div>
               </motion.div>
-              
-              <motion.div 
-                className="flex items-center space-x-4"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input 
-                    placeholder="Search expenses..." 
-                    className="pl-10 w-64 glass-card border-0 focus-premium"
-                  />
-                </div>
-                <Button variant="outline" className="glass-card border-0 hover-glow">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
+              <div className="flex items-center space-x-2">
+                <Button 
+                  onClick={handleBackToExpenses}
+                  variant="outline" 
+                  size="sm"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Expenses
                 </Button>
-                <Button className="btn-premium">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Expense
+                <Button 
+                  onClick={() => navigateToModule('home', { success: 'Navigated to dashboard' })}
+                  variant="outline" 
+                  size="sm"
+                >
+                  <Home className="w-4 h-4 mr-2" />
+                  Dashboard
                 </Button>
-              </motion.div>
+              </div>
             </div>
           </div>
         </motion.header>
 
-        <main className="flex-1 container mx-auto px-8 py-8">
-          {/* Stats Cards */}
+        <main className="flex-1 container mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-6 space-y-6">
+          {/* Success Message */}
+          {success && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center space-x-3"
+            >
+              <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                <Receipt className="w-4 h-4 text-green-600" />
+              </div>
+              <div>
+                <p className="text-green-800 font-medium">{success}</p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Quick Navigation */}
           <motion.div 
-            className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12"
+            className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
             variants={staggerContainer}
             initial="initial"
             animate="animate"
           >
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-blue-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Monthly Expenses
-                  </CardTitle>
-                  <DollarSign className="h-5 w-5 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">$130.0K</div>
-                  <p className="text-sm text-green-600 font-medium">-5.2% vs last month</p>
+            <motion.div variants={fadeInUp}>
+              <Card 
+                className="card-premium border-refined cursor-pointer hover-lift group"
+                onClick={() => navigateToModule('properties/management', { success: 'Viewing properties from operating expenses' })}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                      <Building className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-sm">Properties</h3>
+                      <p className="text-xs text-muted-foreground">View properties</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
 
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-yellow-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Budget Remaining
-                  </CardTitle>
-                  <TrendingUp className="h-5 w-5 text-yellow-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">$5.0K</div>
-                  <p className="text-sm text-yellow-600 font-medium">96.3% utilized</p>
+            <motion.div variants={fadeInUp}>
+              <Card 
+                className="card-premium border-refined cursor-pointer hover-lift group"
+                onClick={() => navigateToModule('expenses', { success: 'Viewing all expenses' })}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                      <DollarSign className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-sm">All Expenses</h3>
+                      <p className="text-xs text-muted-foreground">View all costs</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
 
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-green-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Approved Expenses
-                  </CardTitle>
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">47</div>
-                  <p className="text-sm text-green-600 font-medium">This month</p>
+            <motion.div variants={fadeInUp}>
+              <Card 
+                className="card-premium border-refined cursor-pointer hover-lift group"
+                onClick={() => navigateToModule('expenses/maintenance', { success: 'Viewing maintenance costs' })}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-orange-200 transition-colors">
+                      <AlertTriangle className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-sm">Maintenance</h3>
+                      <p className="text-xs text-muted-foreground">View costs</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
 
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-purple-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Cost Per SqFt
-                  </CardTitle>
-                  <Building className="h-5 w-5 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">$6,488</div>
-                  <p className="text-sm text-green-600 font-medium">Avg per property</p>
+            <motion.div variants={fadeInUp}>
+              <Card 
+                className="card-premium border-refined cursor-pointer hover-lift group"
+                onClick={() => navigateToModule('reports', { success: 'Viewing reports from operating expenses' })}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                      <TrendingUp className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-sm">Reports</h3>
+                      <p className="text-xs text-muted-foreground">View analytics</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-            {/* Expense Categories */}
+          {/* Overview Cards */}
+          <motion.div 
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
+            variants={staggerContainer}
+            initial="initial"
+            animate="animate"
+          >
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-2 sm:pb-3">
+                  <CardTitle className="flex items-center space-x-2 text-sm sm:text-base">
+                    <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                    <span>Monthly Expenses</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Current month</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl sm:text-2xl font-bold text-gradient">$130,000</div>
+                  <p className="text-xs sm:text-sm text-green-600">-5.2% vs last month</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-2 sm:pb-3">
+                  <CardTitle className="flex items-center space-x-2 text-sm sm:text-base">
+                    <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                    <span>Budget Remaining</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">This month</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl sm:text-2xl font-bold text-gradient">$20,000</div>
+                  <p className="text-xs sm:text-sm text-yellow-600">13.3% remaining</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-2 sm:pb-3">
+                  <CardTitle className="flex items-center space-x-2 text-sm sm:text-base">
+                    <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                    <span>Pending Approvals</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Awaiting approval</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl sm:text-2xl font-bold text-gradient">5</div>
+                  <p className="text-xs sm:text-sm text-yellow-600">$12,300 total value</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div variants={fadeInUp}>
+              <Card className="card-premium border-refined">
+                <CardHeader className="pb-2 sm:pb-3">
+                  <CardTitle className="flex items-center space-x-2 text-sm sm:text-base">
+                    <PieChart className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                    <span>Top Category</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Highest expense</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl sm:text-2xl font-bold text-gradient">Utilities</div>
+                  <p className="text-xs sm:text-sm text-blue-600">28% of total expenses</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+
+          {/* Filters and Search */}
             <motion.div 
+            className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
               {...fadeInUp}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="card-premium border-0">
+          >
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Search operating expenses..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full sm:w-64"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="utilities">Utilities</SelectItem>
+                  <SelectItem value="management">Management</SelectItem>
+                  <SelectItem value="insurance">Insurance</SelectItem>
+                  <SelectItem value="security">Security</SelectItem>
+                  <SelectItem value="cleaning">Cleaning</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm">
+                <Filter className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+              <Button size="sm" className="btn-premium">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Expense
+              </Button>
+            </div>
+          </motion.div>
+
+          {/* Expense Categories */}
+          <motion.div variants={fadeInUp}>
+            <Card className="card-premium border-refined">
                 <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <motion.div
-                      className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                      whileHover={{ scale: 1.1, rotate: 10 }}
-                    >
-                      <PieChart className="w-4 h-4 text-white" />
-                    </motion.div>
-                    <div>
-                      <CardTitle>Expense Categories</CardTitle>
-                      <CardDescription>
-                        Breakdown by expense type
-                      </CardDescription>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm sm:text-base">Expense Categories</CardTitle>
+                    <CardDescription>Breakdown by category this month</CardDescription>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigateToModule('reports', { success: 'Viewing reports from operating expenses' })}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    View Reports
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                  {expenseCategories.map((category, index) => (
+                    <motion.div
+                      key={category.category}
+                      className="p-4 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                      whileHover={{ scale: 1.02 }}
+                      onClick={() => setCategoryFilter(category.category.toLowerCase())}
+                    >
+                      <div className="flex items-center space-x-3 mb-3">
+                        <div className={`w-10 h-10 ${category.color} rounded-lg flex items-center justify-center`}>
+                          <Receipt className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-sm">{category.category}</h3>
+                          <p className="text-xs text-muted-foreground">{category.percentage}% of total</p>
+                        </div>
+                      </div>
+                      <div className="text-lg font-bold text-gradient">{category.amount}</div>
+                    </motion.div>
+                  ))}
+                    </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Recent Expenses */}
+          <motion.div variants={fadeInUp}>
+            <Card className="card-premium border-refined">
+              <CardHeader>
+                <CardTitle className="text-sm sm:text-base">Recent Operating Expenses</CardTitle>
+                <CardDescription>Latest expense transactions</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {expenseCategories.map((category, index) => (
+                  {expenses.map((expense, index) => (
                       <motion.div 
-                        key={index}
-                        className="flex items-center justify-between"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.5 + index * 0.1 }}
+                      key={expense.id}
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
+                      whileHover={{ scale: 1.01 }}
+                      onClick={() => handleViewProperty(expense.property)}
                       >
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-4 h-4 rounded-full ${category.color}`} />
-                          <span className="font-medium text-foreground">{category.category}</span>
+                      <div className="flex items-center space-x-4">
+                        <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center">
+                          <Receipt className="w-5 h-5 text-primary" />
                         </div>
+                        <div>
+                          <h3 className="font-semibold text-sm">{expense.description}</h3>
+                          <p className="text-xs text-muted-foreground">{expense.property} • {expense.vendor}</p>
+                          <p className="text-xs text-muted-foreground">{expense.date}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Badge className={getStatusBg(expense.status)}>
+                          {expense.status}
+                        </Badge>
                         <div className="text-right">
-                          <p className="font-semibold text-foreground">{category.amount}</p>
-                          <p className="text-sm text-muted-foreground">{category.percentage}%</p>
+                          <div className="font-semibold">{expense.amount}</div>
+                          <div className="text-xs text-muted-foreground">{expense.category}</div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
                         </div>
                       </motion.div>
                     ))}
@@ -323,41 +603,36 @@ export default function OperatingExpenses() {
               </Card>
             </motion.div>
 
-            {/* Property-wise Expenses */}
-            <motion.div 
-              className="lg:col-span-2"
-              {...fadeInUp}
-              transition={{ delay: 0.6 }}
-            >
-              <Card className="card-premium border-0">
+          {/* Property Expenses */}
+          <motion.div variants={fadeInUp}>
+            <Card className="card-premium border-refined">
                 <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <motion.div
-                      className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                      whileHover={{ scale: 1.1, rotate: 10 }}
-                    >
-                      <Building className="w-4 h-4 text-white" />
-                    </motion.div>
+                <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle>Property-wise Breakdown</CardTitle>
-                      <CardDescription>
-                        Operating expenses by property
-                      </CardDescription>
+                    <CardTitle className="text-sm sm:text-base">Expenses by Property</CardTitle>
+                    <CardDescription>Property-wise expense breakdown</CardDescription>
                     </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigateToModule('properties/management', { success: 'Viewing property details from operating expenses' })}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    View Properties
+                  </Button>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {propertyExpenses.map((property, index) => (
                       <motion.div 
-                        key={index}
-                        className="glass-card p-4 rounded-xl"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.7 + index * 0.1 }}
+                      key={property.property}
+                      className="p-4 border rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                      whileHover={{ scale: 1.02 }}
+                      onClick={() => handleViewProperty(property.property)}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-foreground">{property.property}</h4>
+                      <div className="flex justify-between items-start mb-3">
+                        <h3 className="font-semibold text-sm">{property.property}</h3>
                           <Badge 
                             className={`text-xs ${getUtilizationColor(property.utilization) === 'text-red-600' ? 'bg-red-100 text-red-800' : 
                               getUtilizationColor(property.utilization) === 'text-yellow-600' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}
@@ -366,18 +641,18 @@ export default function OperatingExpenses() {
                             {property.utilization}% budget used
                           </Badge>
                         </div>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <p className="text-muted-foreground">Monthly</p>
-                            <p className="font-semibold text-foreground">{property.monthly}</p>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span>Monthly:</span>
+                          <span className="font-medium">{property.monthly}</span>
                           </div>
-                          <div>
-                            <p className="text-muted-foreground">YTD</p>
-                            <p className="font-semibold text-foreground">{property.ytd}</p>
+                        <div className="flex justify-between">
+                          <span>YTD:</span>
+                          <span className="font-medium">{property.ytd}</span>
                           </div>
-                          <div>
-                            <p className="text-muted-foreground">Budget</p>
-                            <p className="font-semibold text-foreground">{property.budget}</p>
+                        <div className="flex justify-between">
+                          <span>Budget:</span>
+                          <span className="font-medium">{property.budget}</span>
                           </div>
                         </div>
                         <div className="mt-3">
@@ -391,102 +666,6 @@ export default function OperatingExpenses() {
                         </div>
                       </motion.div>
                     ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-
-          {/* Recent Expenses */}
-          <motion.div 
-            {...fadeInUp}
-            transition={{ delay: 0.8 }}
-          >
-            <Card className="card-premium border-0">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <motion.div
-                    className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                    whileHover={{ scale: 1.1, rotate: 10 }}
-                  >
-                    <Receipt className="w-4 h-4 text-white" />
-                  </motion.div>
-                  <div>
-                    <CardTitle className="text-xl">Recent Operating Expenses</CardTitle>
-                    <CardDescription>
-                      Latest expense records and approvals
-                    </CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {expenses.map((expense, index) => {
-                    const StatusIcon = getStatusIcon(expense.status);
-                    return (
-                      <motion.div 
-                        key={expense.id}
-                        className="glass-card p-6 rounded-2xl hover-lift group"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.9 + index * 0.1 }}
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <motion.div 
-                              className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center shadow-lg"
-                              whileHover={{ scale: 1.1, rotate: 10 }}
-                            >
-                              <StatusIcon className="w-6 h-6 text-white" />
-                            </motion.div>
-                            
-                            <div>
-                              <div className="flex items-center space-x-3 mb-1">
-                                <h3 className="font-semibold text-lg text-foreground">{expense.id}</h3>
-                                <Badge 
-                                  className={`text-xs ${getStatusBg(expense.status)}`}
-                                  variant="outline"
-                                >
-                                  {expense.status}
-                                </Badge>
-                                <Badge variant="outline" className="text-xs">
-                                  {expense.category}
-                                </Badge>
-                              </div>
-                              <p className="text-sm font-medium text-foreground mb-1">{expense.description}</p>
-                              <div className="flex items-center space-x-4 text-sm text-muted-foreground mb-2">
-                                <span>Property: {expense.property}</span>
-                                <span>•</span>
-                                <span>Vendor: {expense.vendor}</span>
-                                <span>•</span>
-                                <span>Date: {expense.date}</span>
-                              </div>
-                              <p className="text-sm text-muted-foreground">Budget: {expense.budgetCategory}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="text-right">
-                            <div className="mb-4">
-                              <p className="text-sm text-muted-foreground">Amount</p>
-                              <p className="text-2xl font-bold text-gradient">{expense.amount}</p>
-                            </div>
-                            
-                            <div className="flex items-center space-x-2">
-                              <Button size="sm" className="btn-premium">
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Receipt
-                              </Button>
-                              <Button size="sm" variant="outline" className="glass-card border-0 hover-glow">
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
                 </div>
               </CardContent>
             </Card>
@@ -494,5 +673,22 @@ export default function OperatingExpenses() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function OperatingExpenses() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen bg-background">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <OperatingExpensesContent />
+    </Suspense>
   );
 } 

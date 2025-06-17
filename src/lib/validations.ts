@@ -86,7 +86,7 @@ export const userSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
-  role: z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']), // Match database enum
+  role: z.enum(['USER', 'ADMIN', 'MANAGER', 'SUPER_ADMIN']), // Match database enum with MANAGER
   avatar: z.string().optional(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   // Frontend-only fields (not stored in database yet)
@@ -102,7 +102,7 @@ export const updateUserSchema = z.object({
   firstName: z.string().min(1, 'First name is required').optional(),
   lastName: z.string().min(1, 'Last name is required').optional(),
   email: z.string().email('Invalid email address').optional(),
-  role: z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']).optional(), // Match database enum
+  role: z.enum(['USER', 'ADMIN', 'MANAGER', 'SUPER_ADMIN']).optional(), // Match database enum with MANAGER
   avatar: z.string().optional(),
   password: z.string().min(6, 'Password must be at least 6 characters').optional(),
   // Frontend-only fields (not stored in database yet)

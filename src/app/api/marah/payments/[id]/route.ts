@@ -13,11 +13,12 @@ const updatePaymentSchema = z.object({
 
 async function getHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const payment = await prisma.marahPayment.findUnique({
-      where: { id: params.id },
+    
+    const { id } = await params;const payment = await prisma.marahPayment.findUnique({
+      where: { id: id },
       include: {
         order: {
           include: {
@@ -58,15 +59,16 @@ async function getHandler(
 
 async function putHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const body = await request.json();
+    
+    const { id } = await params;const body = await request.json();
     const validatedData = updatePaymentSchema.parse(body);
 
     // Get the payment first to verify ownership
     const existingPayment = await prisma.marahPayment.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -87,7 +89,7 @@ async function putHandler(
 
     // Update the payment
     const updatedPayment = await prisma.marahPayment.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...validatedData,
         updatedAt: new Date(),
@@ -119,12 +121,13 @@ async function putHandler(
 
 async function deleteHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Get the payment first to verify ownership
+    
+    const { id } = await params;// Get the payment first to verify ownership
     const existingPayment = await prisma.marahPayment.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -158,7 +161,7 @@ async function deleteHandler(
 
     // Delete the payment
     await prisma.marahPayment.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ message: 'Payment deleted successfully' });

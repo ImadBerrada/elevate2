@@ -24,7 +24,8 @@ const calculateCurrentValue = (purchaseValue: number, purchaseDate: Date, deprec
 };
 
 async function handler(request: AuthenticatedRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id: companyId } = await params;
+  
+  const { id } = await params;const { id: companyId } = await params;
   const userId = request.user!.userId;
 
   // Verify company belongs to user

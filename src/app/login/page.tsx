@@ -136,15 +136,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Demo Credentials */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Demo Credentials:</h3>
-          <div className="text-xs text-gray-600 space-y-1">
-            <div><strong>Admin:</strong> admin@elevate.com / admin123</div>
-            <div><strong>Super Admin:</strong> superadmin@elevate.com / superadmin123</div>
-            <div><strong>User:</strong> demo@elevate.com / demo123</div>
-          </div>
-        </div>
+
       </div>
     </div>
   );

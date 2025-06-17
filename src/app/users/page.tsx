@@ -79,15 +79,24 @@ interface UserFormData {
   password?: string;
 }
 
+interface Company {
+  id: string;
+  name: string;
+  industry: string;
+}
+
 // Map frontend roles to backend roles
-const mapRoleToBackend = (role: string): 'USER' | 'ADMIN' | 'SUPER_ADMIN' => {
+const mapRoleToBackend = (role: string): 'USER' | 'ADMIN' | 'MANAGER' | 'SUPER_ADMIN' => {
   switch (role) {
     case 'ADMIN':
-    case 'MANAGER':
       return 'ADMIN';
+    case 'MANAGER':
+      return 'MANAGER';
     case 'VIEWER':
     case 'USER':
       return 'USER';
+    case 'SUPER_ADMIN':
+      return 'SUPER_ADMIN';
     default:
       return 'USER';
   }
@@ -99,6 +108,8 @@ const mapRoleToFrontend = (role: string): 'ADMIN' | 'USER' | 'MANAGER' | 'VIEWER
     case 'SUPER_ADMIN':
       return 'ADMIN';
     case 'ADMIN':
+      return 'ADMIN';
+    case 'MANAGER':
       return 'MANAGER';
     case 'USER':
       return 'USER';
@@ -110,7 +121,9 @@ const mapRoleToFrontend = (role: string): 'ADMIN' | 'USER' | 'MANAGER' | 'VIEWER
 export default function UsersPage() {
   const { isOpen, isMobile, isTablet, isDesktop } = useSidebar();
   const [users, setUsers] = useState<User[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -122,6 +135,15 @@ export default function UsersPage() {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [companySearchTerm, setCompanySearchTerm] = useState("");
+  const [isAddCompanyOpen, setIsAddCompanyOpen] = useState(false);
+  const [newCompanyData, setNewCompanyData] = useState({
+    name: "",
+    industry: "",
+    location: "",
+    email: "",
+    phone: ""
+  });
   const [userData, setUserData] = useState<UserFormData>({
     firstName: "",
     lastName: "",
@@ -139,6 +161,7 @@ export default function UsersPage() {
   useEffect(() => {
     fetchUsers();
     fetchStats();
+    fetchCompanies();
   }, []);
 
   useEffect(() => {
@@ -189,6 +212,19 @@ export default function UsersPage() {
       } catch (fallbackErr) {
         console.error('Failed to fetch fallback stats:', fallbackErr);
       }
+    }
+  };
+
+  const fetchCompanies = async () => {
+    try {
+      setLoadingCompanies(true);
+      const data = await apiClient.getCompaniesList();
+      setCompanies(data.companies || []);
+    } catch (err) {
+      console.error('Failed to fetch companies:', err);
+      // Don't show error for companies fetch as it's optional
+    } finally {
+      setLoadingCompanies(false);
     }
   };
 
@@ -302,7 +338,7 @@ export default function UsersPage() {
         lastName?: string;
         email?: string;
         phone?: string;
-        role?: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
+        role?: 'USER' | 'ADMIN' | 'MANAGER' | 'SUPER_ADMIN';
         status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
         company?: string;
         department?: string;
@@ -371,8 +407,75 @@ export default function UsersPage() {
   };
 
   const updateUserData = (field: string, value: string) => {
-    setUserData(prev => ({ ...prev, [field]: value }));
+    setUserData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
+
+  const handleCreateCompany = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!newCompanyData.name.trim() || !newCompanyData.industry.trim()) {
+      setError("Company name and industry are required");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setError(null);
+
+      const response = await fetch('/api/companies', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+        body: JSON.stringify({
+          name: newCompanyData.name,
+          industry: newCompanyData.industry,
+          location: newCompanyData.location || 'Not specified',
+          email: newCompanyData.email,
+          phone: newCompanyData.phone,
+          size: 'Small Business (1-10 employees)',
+          status: 'ACTIVE'
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create company');
+      }
+
+      const result = await response.json();
+      
+      // Add the new company to the list
+      const newCompany = {
+        id: result.id,
+        name: result.name,
+        industry: result.industry
+      };
+      
+      setCompanies(prev => [newCompany, ...prev]);
+      
+      // Set the new company as selected
+      setUserData(prev => ({ ...prev, company: result.name }));
+      
+      // Reset form and close modal
+      setNewCompanyData({ name: "", industry: "", location: "", email: "", phone: "" });
+      setIsAddCompanyOpen(false);
+      
+    } catch (err) {
+      console.error('Failed to create company:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create company');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const filteredCompanies = companies.filter(company =>
+    company.name.toLowerCase().includes(companySearchTerm.toLowerCase()) ||
+    company.industry.toLowerCase().includes(companySearchTerm.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -481,193 +584,246 @@ export default function UsersPage() {
                     Add User
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[600px] glass-card border-refined">
+                <DialogContent className="sm:max-w-[600px] glass-card border-refined max-h-[90vh] overflow-hidden">
                   <DialogHeader>
                     <DialogTitle className="text-xl font-elegant text-gradient">Add New User</DialogTitle>
                     <DialogDescription className="text-refined">
                       Create a new user account with role and permissions.
                     </DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleCreateUser} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="max-h-[calc(90vh-8rem)] overflow-y-auto pr-2">
+                    <form onSubmit={handleCreateUser} className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="firstName" className="text-sm font-medium">First Name *</Label>
+                          <Input
+                            id="firstName"
+                            placeholder="Enter first name..."
+                            value={userData.firstName}
+                            onChange={(e) => updateUserData("firstName", e.target.value)}
+                            className="border-refined"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="lastName" className="text-sm font-medium">Last Name *</Label>
+                          <Input
+                            id="lastName"
+                            placeholder="Enter last name..."
+                            value={userData.lastName}
+                            onChange={(e) => updateUserData("lastName", e.target.value)}
+                            className="border-refined"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="email" className="text-sm font-medium">Email *</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            placeholder="Enter email address..."
+                            value={userData.email}
+                            onChange={(e) => updateUserData("email", e.target.value)}
+                            className="border-refined"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="phone" className="text-sm font-medium">Phone</Label>
+                          <Input
+                            id="phone"
+                            placeholder="Enter phone number..."
+                            value={userData.phone}
+                            onChange={(e) => updateUserData("phone", e.target.value)}
+                            className="border-refined"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="role" className="text-sm font-medium">Role *</Label>
+                          <Select value={userData.role} onValueChange={(value) => updateUserData("role", value)}>
+                            <SelectTrigger className="border-refined">
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="USER">User</SelectItem>
+                              <SelectItem value="MANAGER">Manager</SelectItem>
+                              <SelectItem value="ADMIN">Administrator</SelectItem>
+                              <SelectItem value="VIEWER">Viewer</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="status" className="text-sm font-medium">Status *</Label>
+                          <Select value={userData.status} onValueChange={(value) => updateUserData("status", value)}>
+                            <SelectTrigger className="border-refined">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ACTIVE">Active</SelectItem>
+                              <SelectItem value="INACTIVE">Inactive</SelectItem>
+                              <SelectItem value="SUSPENDED">Suspended</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="company" className="text-sm font-medium">Company</Label>
+                          <Select value={userData.company || "no-company"} onValueChange={(value) => updateUserData("company", value === "no-company" ? "" : value)}>
+                            <SelectTrigger className="border-refined">
+                              <SelectValue placeholder="Select company" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <div className="flex items-center px-3 pb-2">
+                                <Search className="w-4 h-4 mr-2 text-muted-foreground" />
+                                <Input
+                                  placeholder="Search companies..."
+                                  value={companySearchTerm}
+                                  onChange={(e) => setCompanySearchTerm(e.target.value)}
+                                  className="h-8 border-none focus:ring-0 focus:ring-offset-0"
+                                />
+                              </div>
+                              <div className="border-t border-border/50 mb-2"></div>
+                              <div className="px-2 pb-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full justify-start text-left border-dashed border-primary/50 text-primary hover:bg-primary/5"
+                                  onClick={() => setIsAddCompanyOpen(true)}
+                                >
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  Add New Company
+                                </Button>
+                              </div>
+                              {loadingCompanies ? (
+                                <SelectItem value="loading" disabled>
+                                  <div className="flex items-center">
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Loading companies...
+                                  </div>
+                                </SelectItem>
+                              ) : (
+                                <>
+                                  <SelectItem value="no-company">No company</SelectItem>
+                                  {filteredCompanies.length > 0 ? (
+                                    filteredCompanies.map((company) => (
+                                      <SelectItem key={company.id} value={company.name}>
+                                        <div className="flex items-center">
+                                          <Building className="w-4 h-4 mr-2" />
+                                          <div>
+                                            <div className="font-medium">{company.name}</div>
+                                            <div className="text-xs text-muted-foreground">{company.industry}</div>
+                                          </div>
+                                        </div>
+                                      </SelectItem>
+                                    ))
+                                  ) : companySearchTerm ? (
+                                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                                      No companies found matching "{companySearchTerm}"
+                                    </div>
+                                  ) : null}
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="department" className="text-sm font-medium">Department</Label>
+                          <Input
+                            id="department"
+                            placeholder="Enter department..."
+                            value={userData.department}
+                            onChange={(e) => updateUserData("department", e.target.value)}
+                            className="border-refined"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="position" className="text-sm font-medium">Position</Label>
+                          <Input
+                            id="position"
+                            placeholder="Enter position/title..."
+                            value={userData.position}
+                            onChange={(e) => updateUserData("position", e.target.value)}
+                            className="border-refined"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="location" className="text-sm font-medium">Location</Label>
+                          <Input
+                            id="location"
+                            placeholder="Enter location..."
+                            value={userData.location}
+                            onChange={(e) => updateUserData("location", e.target.value)}
+                            className="border-refined"
+                          />
+                        </div>
+                      </div>
+
                       <div className="space-y-2">
-                        <Label htmlFor="firstName" className="text-sm font-medium">First Name *</Label>
+                        <Label htmlFor="password" className="text-sm font-medium">Password *</Label>
                         <Input
-                          id="firstName"
-                          placeholder="Enter first name..."
-                          value={userData.firstName}
-                          onChange={(e) => updateUserData("firstName", e.target.value)}
+                          id="password"
+                          type="password"
+                          placeholder="Enter password (min 6 characters)..."
+                          value={userData.password}
+                          onChange={(e) => updateUserData("password", e.target.value)}
                           className="border-refined"
                           required
+                          minLength={6}
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="lastName" className="text-sm font-medium">Last Name *</Label>
-                        <Input
-                          id="lastName"
-                          placeholder="Enter last name..."
-                          value={userData.lastName}
-                          onChange={(e) => updateUserData("lastName", e.target.value)}
-                          className="border-refined"
-                          required
-                        />
+                      {error && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-red-600 text-sm">{error}</p>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end space-x-3">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => setIsAddUserOpen(false)}
+                          disabled={submitting}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          type="submit" 
+                          className="btn-premium"
+                          disabled={submitting}
+                        >
+                          {submitting ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4 mr-2" />
+                              Create User
+                            </>
+                          )}
+                        </Button>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="email" className="text-sm font-medium">Email *</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="Enter email address..."
-                          value={userData.email}
-                          onChange={(e) => updateUserData("email", e.target.value)}
-                          className="border-refined"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="phone" className="text-sm font-medium">Phone</Label>
-                        <Input
-                          id="phone"
-                          placeholder="Enter phone number..."
-                          value={userData.phone}
-                          onChange={(e) => updateUserData("phone", e.target.value)}
-                          className="border-refined"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="role" className="text-sm font-medium">Role *</Label>
-                        <Select value={userData.role} onValueChange={(value) => updateUserData("role", value)}>
-                          <SelectTrigger className="border-refined">
-                            <SelectValue placeholder="Select role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="USER">User</SelectItem>
-                            <SelectItem value="MANAGER">Manager</SelectItem>
-                            <SelectItem value="ADMIN">Administrator</SelectItem>
-                            <SelectItem value="VIEWER">Viewer</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="status" className="text-sm font-medium">Status *</Label>
-                        <Select value={userData.status} onValueChange={(value) => updateUserData("status", value)}>
-                          <SelectTrigger className="border-refined">
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="ACTIVE">Active</SelectItem>
-                            <SelectItem value="INACTIVE">Inactive</SelectItem>
-                            <SelectItem value="SUSPENDED">Suspended</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="company" className="text-sm font-medium">Company</Label>
-                        <Input
-                          id="company"
-                          placeholder="Enter company name..."
-                          value={userData.company}
-                          onChange={(e) => updateUserData("company", e.target.value)}
-                          className="border-refined"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="department" className="text-sm font-medium">Department</Label>
-                        <Input
-                          id="department"
-                          placeholder="Enter department..."
-                          value={userData.department}
-                          onChange={(e) => updateUserData("department", e.target.value)}
-                          className="border-refined"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="position" className="text-sm font-medium">Position</Label>
-                        <Input
-                          id="position"
-                          placeholder="Enter position/title..."
-                          value={userData.position}
-                          onChange={(e) => updateUserData("position", e.target.value)}
-                          className="border-refined"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="location" className="text-sm font-medium">Location</Label>
-                        <Input
-                          id="location"
-                          placeholder="Enter location..."
-                          value={userData.location}
-                          onChange={(e) => updateUserData("location", e.target.value)}
-                          className="border-refined"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="password" className="text-sm font-medium">Password *</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="Enter password (min 6 characters)..."
-                        value={userData.password}
-                        onChange={(e) => updateUserData("password", e.target.value)}
-                        className="border-refined"
-                        required
-                        minLength={6}
-                      />
-                    </div>
-
-                    {error && (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <p className="text-red-600 text-sm">{error}</p>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end space-x-3">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        onClick={() => setIsAddUserOpen(false)}
-                        disabled={submitting}
-                      >
-                        Cancel
-                      </Button>
-                      <Button 
-                        type="submit" 
-                        className="btn-premium"
-                        disabled={submitting}
-                      >
-                        {submitting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Creating...
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Create User
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </form>
+                    </form>
+                  </div>
                 </DialogContent>
               </Dialog>
             </div>
@@ -1147,13 +1303,64 @@ export default function UsersPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="edit-company" className="text-sm font-medium">Company</Label>
-                      <Input
-                        id="edit-company"
-                        placeholder="Enter company name..."
-                        value={userData.company}
-                        onChange={(e) => updateUserData("company", e.target.value)}
-                        className="border-refined"
-                      />
+                      <Select value={userData.company || "no-company"} onValueChange={(value) => updateUserData("company", value === "no-company" ? "" : value)}>
+                        <SelectTrigger className="border-refined">
+                          <SelectValue placeholder="Select company" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <div className="flex items-center px-3 pb-2">
+                            <Search className="w-4 h-4 mr-2 text-muted-foreground" />
+                            <Input
+                              placeholder="Search companies..."
+                              value={companySearchTerm}
+                              onChange={(e) => setCompanySearchTerm(e.target.value)}
+                              className="h-8 border-none focus:ring-0 focus:ring-offset-0"
+                            />
+                          </div>
+                          <div className="border-t border-border/50 mb-2"></div>
+                          <div className="px-2 pb-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full justify-start text-left border-dashed border-primary/50 text-primary hover:bg-primary/5"
+                              onClick={() => setIsAddCompanyOpen(true)}
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add New Company
+                            </Button>
+                          </div>
+                          {loadingCompanies ? (
+                            <SelectItem value="loading" disabled>
+                              <div className="flex items-center">
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Loading companies...
+                              </div>
+                            </SelectItem>
+                          ) : (
+                            <>
+                              <SelectItem value="no-company">No company</SelectItem>
+                              {filteredCompanies.length > 0 ? (
+                                filteredCompanies.map((company) => (
+                                  <SelectItem key={company.id} value={company.name}>
+                                    <div className="flex items-center">
+                                      <Building className="w-4 h-4 mr-2" />
+                                      <div>
+                                        <div className="font-medium">{company.name}</div>
+                                        <div className="text-xs text-muted-foreground">{company.industry}</div>
+                                      </div>
+                                    </div>
+                                  </SelectItem>
+                                ))
+                              ) : companySearchTerm ? (
+                                <div className="px-3 py-2 text-sm text-muted-foreground">
+                                  No companies found matching "{companySearchTerm}"
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
@@ -1243,6 +1450,117 @@ export default function UsersPage() {
                   </div>
                 </form>
               </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Add Company Dialog */}
+          <Dialog open={isAddCompanyOpen} onOpenChange={setIsAddCompanyOpen}>
+            <DialogContent className="sm:max-w-[500px] glass-card border-refined">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-elegant text-gradient">Add New Company</DialogTitle>
+                <DialogDescription className="text-refined">
+                  Create a new company to add to your directory.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreateCompany} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="company-name" className="text-sm font-medium">Company Name *</Label>
+                  <Input
+                    id="company-name"
+                    placeholder="Enter company name..."
+                    value={newCompanyData.name}
+                    onChange={(e) => setNewCompanyData(prev => ({ ...prev, name: e.target.value }))}
+                    className="border-refined"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company-industry" className="text-sm font-medium">Industry *</Label>
+                  <Input
+                    id="company-industry"
+                    placeholder="e.g., Technology, Healthcare, Finance..."
+                    value={newCompanyData.industry}
+                    onChange={(e) => setNewCompanyData(prev => ({ ...prev, industry: e.target.value }))}
+                    className="border-refined"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="company-location" className="text-sm font-medium">Location</Label>
+                    <Input
+                      id="company-location"
+                      placeholder="Enter location..."
+                      value={newCompanyData.location}
+                      onChange={(e) => setNewCompanyData(prev => ({ ...prev, location: e.target.value }))}
+                      className="border-refined"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="company-email" className="text-sm font-medium">Email</Label>
+                    <Input
+                      id="company-email"
+                      type="email"
+                      placeholder="Enter email..."
+                      value={newCompanyData.email}
+                      onChange={(e) => setNewCompanyData(prev => ({ ...prev, email: e.target.value }))}
+                      className="border-refined"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company-phone" className="text-sm font-medium">Phone</Label>
+                  <Input
+                    id="company-phone"
+                    placeholder="Enter phone number..."
+                    value={newCompanyData.phone}
+                    onChange={(e) => setNewCompanyData(prev => ({ ...prev, phone: e.target.value }))}
+                    className="border-refined"
+                  />
+                </div>
+
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-red-600 text-sm">{error}</p>
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-3">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
+                      setIsAddCompanyOpen(false);
+                      setNewCompanyData({ name: "", industry: "", location: "", email: "", phone: "" });
+                      setError(null);
+                    }}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    className="btn-premium"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Company
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
             </DialogContent>
           </Dialog>
         </main>

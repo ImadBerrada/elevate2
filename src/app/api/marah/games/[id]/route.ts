@@ -23,11 +23,12 @@ const updateGameSchema = z.object({
 
 async function getHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const game = await prisma.marahGame.findUnique({
-      where: { id: params.id },
+    
+    const { id } = await params;const game = await prisma.marahGame.findUnique({
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -76,15 +77,16 @@ async function getHandler(
 
 async function putHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const body = await request.json();
+    
+    const { id } = await params;const body = await request.json();
     const validatedData = updateGameSchema.parse(body);
 
     // Get the game first to verify ownership
     const existingGame = await prisma.marahGame.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -105,7 +107,7 @@ async function putHandler(
 
     // Update the game
     const updatedGame = await prisma.marahGame.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...validatedData,
         updatedAt: new Date(),
@@ -124,12 +126,13 @@ async function putHandler(
 
 async function deleteHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Get the game first to verify ownership
+    
+    const { id } = await params;// Get the game first to verify ownership
     const existingGame = await prisma.marahGame.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -162,7 +165,7 @@ async function deleteHandler(
 
     // Delete the game
     await prisma.marahGame.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ message: 'Game deleted successfully' });

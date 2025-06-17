@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
+import { withRole, AuthenticatedRequest } from '@/lib/middleware';
 
 const visaSchema = z.object({
   visaNumber: z.string().optional(),
@@ -22,16 +22,74 @@ const visaSchema = z.object({
   laborCardDocument: z.string().optional(),
 });
 
-async function handler(request: AuthenticatedRequest, { params }: { params: { id: string } }) {
-  const employeeId = params.id;
-  const userId = request.user!.userId;
-
-  // Verify employee belongs to user
-  const employee = await prisma.employee.findFirst({
+// Helper function to get manager's assigned company IDs
+async function getManagerAssignedCompanyIds(userId: string): Promise<string[]> {
+  const assignments = await prisma.managerAssignment.findMany({
     where: {
-      id: employeeId,
       userId: userId,
+      isActive: true,
     },
+    select: {
+      companyId: true,
+    },
+  });
+  
+  const assignedCompanyIds = assignments.map(assignment => assignment.companyId);
+  
+  // Also check direct assignment
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { assignedCompanyId: true },
+  });
+  
+  if (user?.assignedCompanyId) {
+    assignedCompanyIds.push(user.assignedCompanyId);
+  }
+  
+  return [...new Set(assignedCompanyIds)]; // Remove duplicates
+}
+
+// Helper function to check if user can access employee
+async function canAccessEmployee(userId: string, userRole: string, employeeId: string): Promise<boolean> {
+  if (userRole === 'SUPER_ADMIN') {
+    return true; // Super admins can access all employees
+  }
+  
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { companyId: true, userId: true },
+  });
+  
+  if (!employee) {
+    return false;
+  }
+  
+  if (userRole === 'ADMIN') {
+    return employee.userId === userId;
+  }
+  
+  if (userRole === 'MANAGER') {
+    const assignedCompanyIds = await getManagerAssignedCompanyIds(userId);
+    return assignedCompanyIds.includes(employee.companyId);
+  }
+  
+  return false;
+}
+
+async function handler(request: AuthenticatedRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const employeeId = id;
+  const userId = request.user!.userId;
+  const userRole = request.user!.role;
+
+  // Check if user can access this employee
+  if (!(await canAccessEmployee(userId, userRole, employeeId))) {
+    return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+  }
+
+  // Verify employee exists
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
   });
 
   if (!employee) {
@@ -91,7 +149,7 @@ async function handler(request: AuthenticatedRequest, { params }: { params: { id
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
 }
 
-export const GET = withAuth(handler);
-export const POST = withAuth(handler);
-export const PUT = withAuth(handler);
-export const DELETE = withAuth(handler); 
+export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(handler);
+export const POST = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(handler);
+export const PUT = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(handler);
+export const DELETE = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(handler); 

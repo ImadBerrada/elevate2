@@ -19,16 +19,58 @@ const updateCompanySchema = z.object({
   logo: z.string().optional(),
 });
 
+// Helper function to check if user can access company
+async function canAccessCompany(userId: string, companyId: string, userRole: string): Promise<boolean> {
+  if (userRole === 'SUPER_ADMIN') {
+    // Super admins can access all companies
+    return true;
+  } else if (userRole === 'ADMIN') {
+    // Admins can access companies they own
+    const company = await prisma.company.findFirst({
+      where: {
+        id: companyId,
+        userId: userId,
+      },
+    });
+    return !!company;
+  } else if (userRole === 'MANAGER') {
+    // Managers can access companies they are assigned to
+    const assignment = await prisma.managerAssignment.findFirst({
+      where: {
+        userId: userId,
+        companyId: companyId,
+        isActive: true,
+      },
+    });
+    return !!assignment;
+  }
+  
+  return false;
+}
+
 // GET /api/companies/[id] - Get a specific company
 export const GET = withAuth(async (
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
-    const company = await prisma.company.findFirst({
+    const { id } = await params;
+    const userId = request.user!.userId;
+    const userRole = request.user!.role;
+    
+    // Check if user can access this company
+    const hasAccess = await canAccessCompany(userId, id, userRole);
+    
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: 'Company not found' },
+        { status: 404 }
+      );
+    }
+    
+    const company = await prisma.company.findUnique({
       where: {
-        id: params.id,
-        userId: request.user!.userId,
+        id: id,
       },
       include: {
         employees: {
@@ -76,18 +118,47 @@ export const GET = withAuth(async (
 // PUT /api/companies/[id] - Update a specific company
 export const PUT = withAuth(async (
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
+    const { id } = await params;
     const body = await request.json();
     const validatedData = updateCompanySchema.parse(body);
+    const userId = request.user!.userId;
+    const userRole = request.user!.role;
 
-    // Check if company exists and belongs to user
-    const existingCompany = await prisma.company.findFirst({
-      where: {
-        id: params.id,
-        userId: request.user!.userId,
-      },
+    // Check if user can access this company
+    const hasAccess = await canAccessCompany(userId, id, userRole);
+    
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: 'Company not found' },
+        { status: 404 }
+      );
+    }
+
+    // For managers, check if they have modify permissions
+    if (userRole === 'MANAGER') {
+      const assignment = await prisma.managerAssignment.findFirst({
+        where: {
+          userId: userId,
+          companyId: id,
+          isActive: true,
+        },
+      });
+      
+      const permissions = assignment?.permissions as { canModifyCompanies?: boolean } | null;
+      if (!assignment || !permissions?.canModifyCompanies) {
+        return NextResponse.json(
+          { error: 'Access denied. You do not have permission to modify this company.' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Get existing company for validation
+    const existingCompany = await prisma.company.findUnique({
+      where: { id: id },
     });
 
     if (!existingCompany) {
@@ -99,12 +170,18 @@ export const PUT = withAuth(async (
 
     // Check if name is being updated and if it conflicts with another company
     if (validatedData.name && validatedData.name !== existingCompany.name) {
+      let nameConflictWhere: any = {
+        name: validatedData.name,
+        id: { not: id },
+      };
+      
+      // For admins, only check within their own companies
+      if (userRole === 'ADMIN') {
+        nameConflictWhere.userId = userId;
+      }
+      
       const nameConflict = await prisma.company.findFirst({
-        where: {
-          name: validatedData.name,
-          userId: request.user!.userId,
-          id: { not: params.id },
-        },
+        where: nameConflictWhere,
       });
 
       if (nameConflict) {
@@ -117,7 +194,7 @@ export const PUT = withAuth(async (
 
     // Update the company
     const company = await prisma.company.update({
-      where: { id: params.id },
+      where: { id: id },
       data: validatedData,
       include: {
         _count: {
@@ -153,15 +230,45 @@ export const PUT = withAuth(async (
 // DELETE /api/companies/[id] - Delete a specific company
 export const DELETE = withAuth(async (
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
-    // Check if company exists and belongs to user
-    const existingCompany = await prisma.company.findFirst({
-      where: {
-        id: params.id,
-        userId: request.user!.userId,
-      },
+    const { id } = await params;
+    const userId = request.user!.userId;
+    const userRole = request.user!.role;
+    
+    // Check if user can access this company
+    const hasAccess = await canAccessCompany(userId, id, userRole);
+    
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: 'Company not found' },
+        { status: 404 }
+      );
+    }
+
+    // For managers, check if they have delete permissions
+    if (userRole === 'MANAGER') {
+      const assignment = await prisma.managerAssignment.findFirst({
+        where: {
+          userId: userId,
+          companyId: id,
+          isActive: true,
+        },
+      });
+      
+      const permissions = assignment?.permissions as { canDeleteCompanies?: boolean } | null;
+      if (!assignment || !permissions?.canDeleteCompanies) {
+        return NextResponse.json(
+          { error: 'Access denied. You do not have permission to delete this company.' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Get existing company
+    const existingCompany = await prisma.company.findUnique({
+      where: { id: id },
       include: {
         _count: {
           select: { employees: true },
@@ -189,7 +296,7 @@ export const DELETE = withAuth(async (
 
     // Delete the company
     await prisma.company.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ message: 'Company deleted successfully' });

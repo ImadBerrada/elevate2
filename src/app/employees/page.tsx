@@ -24,7 +24,7 @@ import {
   Award,
   Clock,
   UserPlus,
-  FileImage,
+
   TrendingUp,
   Car,
   CreditCard
@@ -44,8 +44,9 @@ import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { ImageUpload } from "@/components/ui/image-upload";
-import { EmployeeCardGenerator } from "@/components/ui/employee-card-generator";
+import { IdCardFiller } from "@/components/ui/id-card-filler";
 import { VisaScanner } from "@/components/ui/visa-scanner";
+import { IdScanner } from "@/components/ui/id-scanner";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -57,6 +58,8 @@ interface Employee {
   id: string;
   firstName: string;
   lastName: string;
+  firstNameArabic?: string;
+  lastNameArabic?: string;
   email: string;
   phone?: string;
   position: string;
@@ -118,6 +121,8 @@ interface Employer {
 interface EmployeeFormData {
   firstName: string;
   lastName: string;
+  firstNameArabic?: string;
+  lastNameArabic?: string;
   email: string;
   phone: string;
   department: string;
@@ -133,6 +138,9 @@ interface EmployeeFormData {
   manager: string;
   skills: string;
   avatar: string;
+  // ID Information
+  employeeId: string;
+  emiratesId: string;
   // Driver-specific fields
   licenseNumber: string;
   vehicleInfo: string;
@@ -159,15 +167,19 @@ export default function EmployeesPage() {
   const [isEmployeeDetailOpen, setIsEmployeeDetailOpen] = useState(false);
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [isEditEmployeeOpen, setIsEditEmployeeOpen] = useState(false);
-  const [isCardGeneratorOpen, setIsCardGeneratorOpen] = useState(false);
-  const [selectedEmployeeForCard, setSelectedEmployeeForCard] = useState<Employee | null>(null);
+  const [isIdCardFillerOpen, setIsIdCardFillerOpen] = useState(false);
+  const [selectedEmployeeForIdFiller, setSelectedEmployeeForIdFiller] = useState<Employee | null>(null);
   const [isVisaScannerOpen, setIsVisaScannerOpen] = useState(false);
+  const [isIdScannerOpen, setIsIdScannerOpen] = useState(false);
   const [visaData, setVisaData] = useState<any>(null);
+  const [idData, setIdData] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [employeeData, setEmployeeData] = useState<EmployeeFormData>({
     firstName: "",
     lastName: "",
+    firstNameArabic: "",
+    lastNameArabic: "",
     email: "",
     phone: "",
     department: "",
@@ -183,6 +195,9 @@ export default function EmployeesPage() {
     manager: "",
     skills: "",
     avatar: "",
+    // ID Information
+    employeeId: "",
+    emiratesId: "",
     // Driver-specific fields
     licenseNumber: "",
     vehicleInfo: "",
@@ -344,7 +359,7 @@ export default function EmployeesPage() {
 
       const payload = {
         ...employeeFields,
-        actualCompanyId: employeeData.actualCompanyId === "SAME_AS_OFFICIAL" ? undefined : employeeData.actualCompanyId,
+        actualCompanyId: (employeeData.actualCompanyId === "SAME_AS_OFFICIAL" || !employeeData.actualCompanyId?.trim()) ? undefined : employeeData.actualCompanyId,
         startDate: employeeData.startDate || new Date().toISOString().split('T')[0],
         avatar: employeeData.avatar || undefined,
         // Convert skills string to array
@@ -374,6 +389,8 @@ export default function EmployeesPage() {
       setEmployeeData({
         firstName: "",
         lastName: "",
+        firstNameArabic: "",
+        lastNameArabic: "",
         email: "",
         phone: "",
         department: "",
@@ -389,6 +406,9 @@ export default function EmployeesPage() {
         manager: "",
         skills: "",
         avatar: "",
+        // ID Information
+        employeeId: "",
+        emiratesId: "",
         // Driver-specific fields
         licenseNumber: "",
         vehicleInfo: "",
@@ -400,6 +420,7 @@ export default function EmployeesPage() {
         vehicleRegistration: ""
       });
       setVisaData(null);
+      setIdData(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create employee');
     } finally {
@@ -493,6 +514,8 @@ export default function EmployeesPage() {
     setEmployeeData({
       firstName: employee.firstName,
       lastName: employee.lastName,
+      firstNameArabic: employee.firstNameArabic || "",
+      lastNameArabic: employee.lastNameArabic || "",
       email: employee.email,
       phone: employee.phone || "",
       department: employee.department,
@@ -508,6 +531,9 @@ export default function EmployeesPage() {
       manager: employee.manager || "",
       skills: employee.skills?.join(', ') || "",
       avatar: employee.avatar || "",
+      // ID Information
+      employeeId: (employee as any).employeeId || "",
+      emiratesId: employee.visa?.emiratesId || "",
       // Driver-specific fields
       licenseNumber: (employee as any).licenseNumber || "",
       vehicleInfo: (employee as any).vehicleInfo || "",
@@ -592,13 +618,14 @@ export default function EmployeesPage() {
 
       const payload = {
         ...employeeFields,
-        actualCompanyId: employeeData.actualCompanyId === "SAME_AS_OFFICIAL" ? undefined : employeeData.actualCompanyId,
+        actualCompanyId: (employeeData.actualCompanyId === "SAME_AS_OFFICIAL" || !employeeData.actualCompanyId?.trim()) ? undefined : employeeData.actualCompanyId,
         startDate: employeeData.startDate || selectedEmployee.startDate,
         avatar: employeeData.avatar || undefined,
         // Convert skills string to array
         skills: employeeData.skills ? employeeData.skills.split(',').map(skill => skill.trim()).filter(Boolean) : [],
       };
 
+      console.log('Updating employee with payload:', payload);
       const updatedEmployee = await apiClient.updateEmployee(selectedEmployee.id, payload);
       
       // If visa data exists, save it for the employee
@@ -619,6 +646,8 @@ export default function EmployeesPage() {
       setEmployeeData({
         firstName: "",
         lastName: "",
+        firstNameArabic: "",
+        lastNameArabic: "",
         email: "",
         phone: "",
         department: "",
@@ -634,6 +663,9 @@ export default function EmployeesPage() {
         manager: "",
         skills: "",
         avatar: "",
+        // ID Information
+        employeeId: "",
+        emiratesId: "",
         // Driver-specific fields
         licenseNumber: "",
         vehicleInfo: "",
@@ -645,6 +677,7 @@ export default function EmployeesPage() {
         vehicleRegistration: ""
       });
       setVisaData(null);
+      setIdData(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update employee');
     } finally {
@@ -663,9 +696,9 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleGenerateCard = (employee: Employee) => {
-    setSelectedEmployeeForCard(employee);
-    setIsCardGeneratorOpen(true);
+  const handleFillIdCard = (employee: Employee) => {
+    setSelectedEmployeeForIdFiller(employee);
+    setIsIdCardFillerOpen(true);
   };
 
   const updateEmployeeData = (field: string, value: string) => {
@@ -759,6 +792,66 @@ export default function EmployeesPage() {
   const handleVisaDocumentUploaded = (document: string) => {
     // Store the visa document for later use
     console.log('Visa document uploaded:', document);
+  };
+
+  const handleIdDataExtracted = (data: any) => {
+    setIdData(data);
+    
+    console.log('ID data received for auto-fill:', data);
+    
+    // Auto-fill employee data from ID
+    if (data.employeeId && !employeeData.employeeId) {
+      console.log('Auto-filling employee ID:', data.employeeId);
+      updateEmployeeData("employeeId", data.employeeId);
+    }
+    
+    if (data.emiratesId && !employeeData.emiratesId) {
+      console.log('Auto-filling Emirates ID:', data.emiratesId);
+      updateEmployeeData("emiratesId", data.emiratesId);
+    }
+
+    // Auto-fill name from full name if available
+    if (data.fullName && (!employeeData.firstName || !employeeData.lastName)) {
+      const nameParts = data.fullName.split(' ');
+      if (nameParts.length >= 2) {
+        const firstName = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ');
+        
+        if (!employeeData.firstName) {
+          console.log('Auto-filling first name from ID:', firstName);
+          updateEmployeeData("firstName", firstName);
+        }
+        if (!employeeData.lastName) {
+          console.log('Auto-filling last name from ID:', lastName);
+          updateEmployeeData("lastName", lastName);
+        }
+      }
+    }
+
+    // Auto-fill date of birth if available
+    if (data.dateOfBirth && !employeeData.dateOfBirth) {
+      console.log('Auto-filling date of birth from ID:', data.dateOfBirth);
+      updateEmployeeData("dateOfBirth", data.dateOfBirth);
+    }
+
+    // Auto-fill location from nationality if available
+    if (data.nationality && !employeeData.location) {
+      console.log('Auto-filling location from nationality:', data.nationality);
+      updateEmployeeData("location", data.nationality);
+    }
+
+    // Auto-fill license number if it's a driver license
+    if (data.licenseNumber && !employeeData.licenseNumber) {
+      console.log('Auto-filling license number from ID:', data.licenseNumber);
+      updateEmployeeData("licenseNumber", data.licenseNumber);
+    }
+    
+    console.log('ID data extracted and auto-filled:', data);
+  };
+
+  const handleIdDocumentUploaded = (document: string) => {
+    // Store the ID document for later use
+    console.log('ID document uploaded:', document);
   };
 
   const filteredEmployees = employees;
@@ -942,6 +1035,34 @@ export default function EmployeesPage() {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
+                          <Label htmlFor="firstNameArabic" className="text-sm font-medium">First Name (Arabic)</Label>
+                          <Input
+                            id="firstNameArabic"
+                            placeholder="الاسم الأول بالعربية (اختياري)"
+                            value={employeeData.firstNameArabic || ""}
+                            onChange={(e) => updateEmployeeData("firstNameArabic", e.target.value)}
+                            className="border-refined text-right"
+                            dir="rtl"
+                          />
+                          <p className="text-xs text-muted-foreground">Optional - Used for Arabic ID card templates</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="lastNameArabic" className="text-sm font-medium">Last Name (Arabic)</Label>
+                          <Input
+                            id="lastNameArabic"
+                            placeholder="اسم العائلة بالعربية (اختياري)"
+                            value={employeeData.lastNameArabic || ""}
+                            onChange={(e) => updateEmployeeData("lastNameArabic", e.target.value)}
+                            className="border-refined text-right"
+                            dir="rtl"
+                          />
+                          <p className="text-xs text-muted-foreground">Optional - Used for Arabic ID card templates</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
                           <Label htmlFor="email" className="text-sm font-medium">Email *</Label>
                           <Input
                             id="email"
@@ -992,6 +1113,66 @@ export default function EmployeesPage() {
                             ) : null;
                           })()}
                         </div>
+                      </div>
+
+                      {/* ID Information Section */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-base font-medium">ID Information</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsIdScannerOpen(true)}
+                            className="text-sm"
+                          >
+                            <CreditCard className="w-4 h-4 mr-2" />
+                            Scan ID Document
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="employeeId" className="text-sm font-medium">Employee ID</Label>
+                            <Input
+                              id="employeeId"
+                              placeholder="EMP-2024-0001"
+                              value={employeeData.employeeId}
+                              onChange={(e) => updateEmployeeData("employeeId", e.target.value)}
+                              className="border-refined font-mono"
+                            />
+                            <p className="text-xs text-muted-foreground">Internal employee identification number</p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="emiratesId" className="text-sm font-medium">Emirates ID</Label>
+                            <Input
+                              id="emiratesId"
+                              placeholder="784-YYYY-NNNNNNN-N"
+                              value={employeeData.emiratesId}
+                              onChange={(e) => updateEmployeeData("emiratesId", e.target.value)}
+                              className="border-refined font-mono"
+                            />
+                            <p className="text-xs text-muted-foreground">UAE Emirates ID number</p>
+                          </div>
+                        </div>
+
+                        {idData && (
+                          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                            <p className="text-green-600 text-sm font-medium mb-3">ID data extracted successfully!</p>
+                            <div className="grid grid-cols-2 gap-4 text-xs">
+                              {idData.employeeId && (
+                                <div><span className="text-muted-foreground">Employee ID:</span> {idData.employeeId}</div>
+                              )}
+                              {idData.emiratesId && (
+                                <div><span className="text-muted-foreground">Emirates ID:</span> {idData.emiratesId}</div>
+                              )}
+                              {idData.documentType && (
+                                <div><span className="text-muted-foreground">Document Type:</span> {idData.documentType}</div>
+                              )}
+                              <div><span className="text-muted-foreground">Confidence:</span> {Math.round(idData.confidence * 100)}%</div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -1643,17 +1824,18 @@ export default function EmployeesPage() {
                             >
                               <Edit className="w-4 h-4" />
                             </Button>
+
                             <Button 
                               size="sm" 
                               variant="ghost" 
-                              className="h-8 w-8 p-0 hover:bg-purple-100 hover:text-purple-700"
+                              className="h-8 w-8 p-0 hover:bg-orange-100 hover:text-orange-700"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleGenerateCard(employee);
+                                handleFillIdCard(employee);
                               }}
-                              title="Generate ID Card"
+                              title="Fill ID Card Template"
                             >
-                              <FileImage className="w-4 h-4" />
+                              <CreditCard className="w-4 h-4" />
                             </Button>
                           </div>
                           <Button 
@@ -1750,17 +1932,18 @@ export default function EmployeesPage() {
                                     >
                                       <Edit className="w-4 h-4" />
                                     </Button>
+
                                     <Button 
                                       size="sm" 
                                       variant="ghost" 
-                                      className="h-8 w-8 p-0 hover:bg-purple-100 hover:text-purple-700"
+                                      className="h-8 w-8 p-0 hover:bg-orange-100 hover:text-orange-700"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleGenerateCard(employee);
+                                        handleFillIdCard(employee);
                                       }}
-                                      title="Generate ID Card"
+                                      title="Fill ID Card Template"
                                     >
-                                      <FileImage className="w-4 h-4" />
+                                      <CreditCard className="w-4 h-4" />
                                     </Button>
                                     <Button 
                                       size="sm" 
@@ -2157,6 +2340,34 @@ export default function EmployeesPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
+                      <Label htmlFor="firstNameArabic" className="text-sm font-medium">First Name (Arabic)</Label>
+                      <Input
+                        id="firstNameArabic"
+                        placeholder="الاسم الأول بالعربية (اختياري)"
+                        value={employeeData.firstNameArabic || ""}
+                        onChange={(e) => updateEmployeeData("firstNameArabic", e.target.value)}
+                        className="border-refined text-right"
+                        dir="rtl"
+                      />
+                      <p className="text-xs text-muted-foreground">Optional - Used for Arabic ID card templates</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="lastNameArabic" className="text-sm font-medium">Last Name (Arabic)</Label>
+                      <Input
+                        id="lastNameArabic"
+                        placeholder="اسم العائلة بالعربية (اختياري)"
+                        value={employeeData.lastNameArabic || ""}
+                        onChange={(e) => updateEmployeeData("lastNameArabic", e.target.value)}
+                        className="border-refined text-right"
+                        dir="rtl"
+                      />
+                      <p className="text-xs text-muted-foreground">Optional - Used for Arabic ID card templates</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
                       <Label htmlFor="email" className="text-sm font-medium">Email *</Label>
                       <Input
                         id="email"
@@ -2207,6 +2418,66 @@ export default function EmployeesPage() {
                         ) : null;
                       })()}
                     </div>
+                  </div>
+
+                  {/* ID Information Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-medium">ID Information</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsIdScannerOpen(true)}
+                        className="text-sm"
+                      >
+                        <CreditCard className="w-4 h-4 mr-2" />
+                        Scan ID Document
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="employeeId" className="text-sm font-medium">Employee ID</Label>
+                        <Input
+                          id="employeeId"
+                          placeholder="EMP-2024-0001"
+                          value={employeeData.employeeId}
+                          onChange={(e) => updateEmployeeData("employeeId", e.target.value)}
+                          className="border-refined font-mono"
+                        />
+                        <p className="text-xs text-muted-foreground">Internal employee identification number</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="emiratesId" className="text-sm font-medium">Emirates ID</Label>
+                        <Input
+                          id="emiratesId"
+                          placeholder="784-YYYY-NNNNNNN-N"
+                          value={employeeData.emiratesId}
+                          onChange={(e) => updateEmployeeData("emiratesId", e.target.value)}
+                          className="border-refined font-mono"
+                        />
+                        <p className="text-xs text-muted-foreground">UAE Emirates ID number</p>
+                      </div>
+                    </div>
+
+                    {idData && (
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-green-600 text-sm font-medium mb-3">ID data extracted successfully!</p>
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          {idData.employeeId && (
+                            <div><span className="text-muted-foreground">Employee ID:</span> {idData.employeeId}</div>
+                          )}
+                          {idData.emiratesId && (
+                            <div><span className="text-muted-foreground">Emirates ID:</span> {idData.emiratesId}</div>
+                          )}
+                          {idData.documentType && (
+                            <div><span className="text-muted-foreground">Document Type:</span> {idData.documentType}</div>
+                          )}
+                          <div><span className="text-muted-foreground">Confidence:</span> {Math.round(idData.confidence * 100)}%</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -2627,21 +2898,23 @@ export default function EmployeesPage() {
             </DialogContent>
           </Dialog>
 
-          {/* Card Generator Dialog */}
-          <Dialog open={isCardGeneratorOpen} onOpenChange={setIsCardGeneratorOpen}>
+
+
+          {/* ID Card Filler Dialog */}
+          <Dialog open={isIdCardFillerOpen} onOpenChange={setIsIdCardFillerOpen}>
             <DialogContent className="sm:max-w-[900px] glass-card border-refined max-h-[90vh] overflow-hidden">
               <DialogHeader>
-                <DialogTitle className="text-xl font-elegant text-gradient">Employee ID Card Generator</DialogTitle>
+                <DialogTitle className="text-xl font-elegant text-gradient">Fill ID Card Template</DialogTitle>
                 <DialogDescription className="text-refined">
-                  Generate a professional ID card for {selectedEmployeeForCard?.firstName} {selectedEmployeeForCard?.lastName}
+                  Fill existing ID card template with {selectedEmployeeForIdFiller?.firstName} {selectedEmployeeForIdFiller?.lastName}'s information
                 </DialogDescription>
               </DialogHeader>
               <div className="max-h-[calc(90vh-8rem)] overflow-y-auto pr-2">
-                {selectedEmployeeForCard && (
-                  <EmployeeCardGenerator
-                    employee={selectedEmployeeForCard}
-                    company={companies.find(c => c.id === selectedEmployeeForCard.companyId) || { id: '', name: 'Unknown Company' }}
-                    onClose={() => setIsCardGeneratorOpen(false)}
+                {selectedEmployeeForIdFiller && (
+                  <IdCardFiller
+                    employee={selectedEmployeeForIdFiller}
+                    company={companies.find(c => c.id === selectedEmployeeForIdFiller.companyId) || { id: '', name: 'Unknown Company' }}
+                    onClose={() => setIsIdCardFillerOpen(false)}
                   />
                 )}
               </div>
@@ -2666,6 +2939,32 @@ export default function EmployeesPage() {
                   <Button 
                     variant="outline" 
                     onClick={() => setIsVisaScannerOpen(false)}
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* ID Scanner Dialog */}
+          <Dialog open={isIdScannerOpen} onOpenChange={setIsIdScannerOpen}>
+            <DialogContent className="sm:max-w-[800px] glass-card border-refined max-h-[90vh] overflow-hidden">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-elegant text-gradient">ID Document Scanner</DialogTitle>
+                <DialogDescription className="text-refined">
+                  Upload and scan ID documents to automatically extract ID numbers
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[calc(90vh-8rem)] overflow-y-auto pr-2">
+                <IdScanner
+                  onIdExtracted={handleIdDataExtracted}
+                  onDocumentUploaded={handleIdDocumentUploaded}
+                />
+                <div className="flex justify-end mt-6">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsIdScannerOpen(false)}
                   >
                     Close
                   </Button>

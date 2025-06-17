@@ -87,6 +87,7 @@ export default function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [marahCompanyId, setMarahCompanyId] = useState<string | null>(null);
   
   // Filter states
@@ -107,6 +108,14 @@ export default function DriversPage() {
   useEffect(() => {
     fetchMarahCompany();
   }, []);
+
+  // Auto-dismiss success notifications
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   useEffect(() => {
     if (marahCompanyId) {
@@ -297,6 +306,11 @@ export default function DriversPage() {
   const clearFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
+  };
+
+  const handleDriverCreated = () => {
+    setSuccess("✅ Driver created successfully and added to employee management!");
+    fetchDrivers();
   };
 
   const exportDrivers = () => {
@@ -794,7 +808,7 @@ export default function DriversPage() {
       <AddDriverModal
         isOpen={showAddDriver}
         onClose={() => setShowAddDriver(false)}
-        onDriverCreated={fetchDrivers}
+        onDriverCreated={handleDriverCreated}
         companyId={marahCompanyId || ""}
       />
 
@@ -811,6 +825,32 @@ export default function DriversPage() {
           handleEditDriver(driverId);
         }}
       />
+
+      {/* Success Notification */}
+      {success && (
+        <div className="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50">
+          <div className="flex items-center space-x-2">
+            <CheckCircle className="w-5 h-5" />
+            <span>{success}</span>
+            <Button size="sm" variant="ghost" onClick={() => setSuccess(null)} className="text-white hover:bg-green-600">
+              ×
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Error Notification */}
+      {error && (
+        <div className="fixed bottom-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg z-50">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5" />
+            <span>{error}</span>
+            <Button size="sm" variant="ghost" onClick={() => setError(null)} className="text-white hover:bg-red-600">
+              ×
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

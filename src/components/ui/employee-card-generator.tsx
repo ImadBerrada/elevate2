@@ -47,6 +47,41 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
   const [language, setLanguage] = useState<'en' | 'ar'>('en');
   const cardRef = useRef<HTMLDivElement>(null);
 
+  // Function to get company logo based on company name and language
+  const getCompanyLogo = (companyName: string, lang: 'en' | 'ar') => {
+    const normalizedName = companyName.toLowerCase().replace(/\s+/g, ' ').trim();
+    
+    // Map company names to their logo file names
+    const logoMap: { [key: string]: string } = {
+      'albarq': 'albarq',
+      'marah': 'marah',
+      'marah games': 'marah',
+      'marah inflatable games rental': 'marah',
+      '7elements': '7elements',
+      'lepadel': 'lepadel',
+      'outbox': 'outbox',
+      'bridge retreat': 'bridge retreat',
+      'viking': 'viking',
+      'akwan': 'akwan',
+      'goldstone': 'goldstone'
+    };
+
+    // Find matching logo
+    for (const [key, logoName] of Object.entries(logoMap)) {
+      if (normalizedName.includes(key)) {
+        const langSuffix = lang === 'ar' ? 'arabic' : 'english';
+        // Handle special case for akwan arabic
+        if (logoName === 'akwan' && lang === 'ar') {
+          return `/ids/akwan ar.png`;
+        }
+        return `/ids/${logoName} ${langSuffix}.png`;
+      }
+    }
+    
+    // Default fallback
+    return null;
+  };
+
   const downloadCard = async () => {
     if (!cardRef.current) return;
 
@@ -97,72 +132,100 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
             z-index: 10;
           ">
-            ${company.logo ? 
-              `<img src="${company.logo}" alt="${company.name}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain;" crossorigin="anonymous" />` :
-              `<div style="width: 50px; height: 50px; border-radius: 50%; background-color: #f8fafc; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #2563EB;">AZAAB</div>`
+            ${(() => {
+              const companyLogo = getCompanyLogo(company.name, language);
+              if (companyLogo) {
+                return `<img src="${companyLogo}" alt="${company.name}" style="width: 60px; height: 60px; border-radius: 50%; object-fit: contain;" crossorigin="anonymous" />`;
+              } else if (company.logo) {
+                return `<img src="${company.logo}" alt="${company.name}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain;" crossorigin="anonymous" />`;
+              } else {
+                return `<div style="width: 50px; height: 50px; border-radius: 50%; background-color: #f8fafc; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: #2563EB;">${company.name.charAt(0)}</div>`;
+              }
+            })()}
+          </div>
+
+          <!-- Employee Photo Circle -->
+          <div style="
+            position: absolute;
+            top: 70px;
+            right: 40px;
+            width: 60px;
+            height: 60px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            border: 3px solid #f59e0b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+          ">
+            ${employee.avatar ? 
+              `<img src="${employee.avatar}" alt="${employee.firstName} ${employee.lastName}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" crossorigin="anonymous" />` :
+              `<div style="width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #d97706); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: white;">${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}</div>`
             }
           </div>
 
           <!-- Card Content -->
           <div style="
             position: absolute;
-            top: 150px;
-            left: 40px;
-            right: 40px;
+            top: 160px;
+            left: 30px;
+            right: 30px;
             text-align: center;
           ">
             ${language === 'en' ? `
               <!-- Name Section -->
-              <div style="margin-bottom: 22px;">
-                <h3 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 6px 0; letter-spacing: 0.5px;">Name</h3>
-                <p style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0; line-height: 1.3;">${employee.firstName} ${employee.lastName}</p>
-                <div style="width: 200px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
+              <div style="margin-bottom: 18px;">
+                <h3 style="font-size: 14px; font-weight: 700; color: #1f2937; margin: 0 0 4px 0; letter-spacing: 0.5px; text-transform: uppercase;">Name</h3>
+                <p style="font-size: 16px; font-weight: 600; color: #2563eb; margin: 0 0 6px 0; line-height: 1.2;">${employee.firstName} ${employee.lastName}</p>
+                <div style="width: 180px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
               </div>
 
               <!-- Position Section -->
-              <div style="margin-bottom: 22px;">
-                <h3 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 6px 0; letter-spacing: 0.5px;">Position</h3>
-                <p style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0; line-height: 1.3;">${employee.position}</p>
-                <div style="width: 200px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
+              <div style="margin-bottom: 18px;">
+                <h3 style="font-size: 14px; font-weight: 700; color: #1f2937; margin: 0 0 4px 0; letter-spacing: 0.5px; text-transform: uppercase;">Position</h3>
+                <p style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0; line-height: 1.2;">${employee.position}</p>
+                <div style="width: 180px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
               </div>
 
               <!-- ID Number Section -->
-              <div style="margin-bottom: 22px;">
-                <h3 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 6px 0; letter-spacing: 0.5px;">ID NO.</h3>
-                <p style="font-size: 15px; font-weight: 600; color: #4b5563; margin: 0 0 6px 0; font-family: monospace; letter-spacing: 1px; line-height: 1.3;">${employee.id.substring(0, 8).toUpperCase()}</p>
-                <div style="width: 200px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
+              <div style="margin-bottom: 18px;">
+                <h3 style="font-size: 14px; font-weight: 700; color: #1f2937; margin: 0 0 4px 0; letter-spacing: 0.5px; text-transform: uppercase;">ID NO.</h3>
+                <p style="font-size: 16px; font-weight: 700; color: #dc2626; margin: 0 0 6px 0; font-family: monospace; letter-spacing: 1px; line-height: 1.2;">${employee.id.substring(0, 8).toUpperCase()}</p>
+                <div style="width: 180px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
               </div>
 
               <!-- Company Name Section -->
               <div style="margin-bottom: 15px;">
-                <h3 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 6px 0; letter-spacing: 0.5px;">Company Name</h3>
-                <p style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0; line-height: 1.3;">${company.name}</p>
-                <div style="width: 200px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
+                <h3 style="font-size: 14px; font-weight: 700; color: #1f2937; margin: 0 0 4px 0; letter-spacing: 0.5px; text-transform: uppercase;">Company</h3>
+                <p style="font-size: 14px; font-weight: 600; color: #059669; margin: 0 0 6px 0; line-height: 1.2;">${company.name}</p>
+                <div style="width: 180px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
               </div>
             ` : `
               <!-- Arabic Version -->
-              <div style="margin-bottom: 22px; direction: rtl;">
-                <h3 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 6px 0; letter-spacing: 0.5px;">الاسم</h3>
-                <p style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0; line-height: 1.3;">${employee.firstName} ${employee.lastName}</p>
-                <div style="width: 200px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
+              <div style="margin-bottom: 18px; direction: rtl;">
+                <h3 style="font-size: 14px; font-weight: 700; color: #1f2937; margin: 0 0 4px 0; letter-spacing: 0.5px;">الاسم</h3>
+                <p style="font-size: 16px; font-weight: 600; color: #2563eb; margin: 0 0 6px 0; line-height: 1.2;">${employee.firstName} ${employee.lastName}</p>
+                <div style="width: 180px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
               </div>
 
-              <div style="margin-bottom: 22px; direction: rtl;">
-                <h3 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 6px 0; letter-spacing: 0.5px;">المسمى الوظيفي</h3>
-                <p style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0; line-height: 1.3;">${employee.position}</p>
-                <div style="width: 200px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
+              <div style="margin-bottom: 18px; direction: rtl;">
+                <h3 style="font-size: 14px; font-weight: 700; color: #1f2937; margin: 0 0 4px 0; letter-spacing: 0.5px;">المسمى الوظيفي</h3>
+                <p style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0; line-height: 1.2;">${employee.position}</p>
+                <div style="width: 180px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
               </div>
 
-              <div style="margin-bottom: 22px; direction: rtl;">
-                <h3 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 6px 0; letter-spacing: 0.5px;">الرقــــم الوظيفي</h3>
-                <p style="font-size: 15px; font-weight: 600; color: #4b5563; margin: 0 0 6px 0; font-family: monospace; letter-spacing: 1px; line-height: 1.3;">${employee.id.substring(0, 8).toUpperCase()}</p>
-                <div style="width: 200px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
+              <div style="margin-bottom: 18px; direction: rtl;">
+                <h3 style="font-size: 14px; font-weight: 700; color: #1f2937; margin: 0 0 4px 0; letter-spacing: 0.5px;">الرقــــم الوظيفي</h3>
+                <p style="font-size: 16px; font-weight: 700; color: #dc2626; margin: 0 0 6px 0; font-family: monospace; letter-spacing: 1px; line-height: 1.2;">${employee.id.substring(0, 8).toUpperCase()}</p>
+                <div style="width: 180px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
               </div>
 
               <div style="margin-bottom: 15px; direction: rtl;">
-                <h3 style="font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 6px 0; letter-spacing: 0.5px;">اســــم الشــــركة</h3>
-                <p style="font-size: 15px; font-weight: 500; color: #4b5563; margin: 0 0 6px 0; line-height: 1.3;">${company.name}</p>
-                <div style="width: 200px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
+                <h3 style="font-size: 14px; font-weight: 700; color: #1f2937; margin: 0 0 4px 0; letter-spacing: 0.5px;">الشــــركة</h3>
+                <p style="font-size: 14px; font-weight: 600; color: #059669; margin: 0 0 6px 0; line-height: 1.2;">${company.name}</p>
+                <div style="width: 180px; height: 1px; background: repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px); margin: 0 auto;"></div>
               </div>
             `}
           </div>
@@ -267,15 +330,86 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
           zIndex: 10
         }}
       >
-        {company.logo ? (
+        {(() => {
+          const companyLogo = getCompanyLogo(company.name, language);
+          if (companyLogo) {
+            return (
+              <img 
+                src={companyLogo} 
+                alt={company.name}
+                style={{ 
+                  width: '60px', 
+                  height: '60px',
+                  borderRadius: '50%',
+                  objectFit: 'contain'
+                }}
+                crossOrigin="anonymous"
+              />
+            );
+          } else if (company.logo) {
+            return (
+              <img 
+                src={company.logo} 
+                alt={company.name}
+                style={{ 
+                  width: '50px', 
+                  height: '50px',
+                  borderRadius: '50%',
+                  objectFit: 'contain'
+                }}
+                crossOrigin="anonymous"
+              />
+            );
+          } else {
+            return (
+              <div 
+                style={{ 
+                  width: '50px', 
+                  height: '50px',
+                  borderRadius: '50%',
+                  backgroundColor: '#f8fafc',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  color: '#2563EB'
+                }}
+              >
+                {company.name.charAt(0)}
+              </div>
+            );
+          }
+        })()}
+      </div>
+
+      {/* Employee Photo Circle */}
+      <div 
+        style={{
+          position: 'absolute',
+          top: '70px',
+          right: '40px',
+          width: '60px',
+          height: '60px',
+          backgroundColor: '#ffffff',
+          borderRadius: '50%',
+          border: '3px solid #f59e0b',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+          zIndex: 10
+        }}
+      >
+        {employee.avatar ? (
           <img 
-            src={company.logo} 
-            alt={company.name}
+            src={employee.avatar} 
+            alt={`${employee.firstName} ${employee.lastName}`}
             style={{ 
               width: '50px', 
               height: '50px',
               borderRadius: '50%',
-              objectFit: 'contain'
+              objectFit: 'cover'
             }}
             crossOrigin="anonymous"
           />
@@ -285,16 +419,16 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
               width: '50px', 
               height: '50px',
               borderRadius: '50%',
-              backgroundColor: '#f8fafc',
+              background: 'linear-gradient(135deg, #f59e0b, #d97706)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '12px',
+              fontSize: '14px',
               fontWeight: 'bold',
-              color: '#2563EB'
+              color: 'white'
             }}
           >
-            AZAAB
+            {employee.firstName.charAt(0)}{employee.lastName.charAt(0)}
           </div>
         )}
       </div>
@@ -303,41 +437,42 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
       <div 
         style={{ 
           position: 'absolute',
-          top: '150px',
-          left: '40px',
-          right: '40px',
+          top: '160px',
+          left: '30px',
+          right: '30px',
           textAlign: 'center'
         }}
       >
         {language === 'en' ? (
           <>
             {/* Name Section */}
-            <div style={{ marginBottom: '22px' }}>
+            <div style={{ marginBottom: '18px' }}>
               <h3 
                 style={{ 
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
                   color: '#1f2937',
-                  margin: '0 0 6px 0',
-                  letterSpacing: '0.5px'
+                  margin: '0 0 4px 0',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase'
                 }}
               >
                 Name
               </h3>
               <p 
                 style={{ 
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  color: '#4b5563',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#2563eb',
                   margin: '0 0 6px 0',
-                  lineHeight: '1.3'
+                  lineHeight: '1.2'
                 }}
               >
                 {employee.firstName} {employee.lastName}
               </p>
               <div 
                 style={{ 
-                  width: '200px', 
+                  width: '180px', 
                   height: '1px',
                   background: 'repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px)',
                   margin: '0 auto'
@@ -346,14 +481,15 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
             </div>
 
             {/* Position Section */}
-            <div style={{ marginBottom: '22px' }}>
+            <div style={{ marginBottom: '18px' }}>
               <h3 
                 style={{ 
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
                   color: '#1f2937',
-                  margin: '0 0 6px 0',
-                  letterSpacing: '0.5px'
+                  margin: '0 0 4px 0',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase'
                 }}
               >
                 Position
@@ -364,14 +500,14 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
                   fontWeight: '500',
                   color: '#4b5563',
                   margin: '0 0 6px 0',
-                  lineHeight: '1.3'
+                  lineHeight: '1.2'
                 }}
               >
                 {employee.position}
               </p>
               <div 
                 style={{ 
-                  width: '200px', 
+                  width: '180px', 
                   height: '1px',
                   background: 'repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px)',
                   margin: '0 auto'
@@ -380,34 +516,35 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
             </div>
 
             {/* ID Number Section */}
-            <div style={{ marginBottom: '22px' }}>
+            <div style={{ marginBottom: '18px' }}>
               <h3 
                 style={{ 
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
                   color: '#1f2937',
-                  margin: '0 0 6px 0',
-                  letterSpacing: '0.5px'
+                  margin: '0 0 4px 0',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase'
                 }}
               >
                 ID NO.
               </h3>
               <p 
                 style={{ 
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  color: '#4b5563',
+                  fontSize: '16px',
+                  fontWeight: '700',
+                  color: '#dc2626',
                   margin: '0 0 6px 0',
                   fontFamily: 'monospace',
                   letterSpacing: '1px',
-                  lineHeight: '1.3'
+                  lineHeight: '1.2'
                 }}
               >
                 {employee.id.substring(0, 8).toUpperCase()}
               </p>
               <div 
                 style={{ 
-                  width: '200px', 
+                  width: '180px', 
                   height: '1px',
                   background: 'repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px)',
                   margin: '0 auto'
@@ -419,29 +556,30 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
             <div style={{ marginBottom: '15px' }}>
               <h3 
                 style={{ 
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
                   color: '#1f2937',
-                  margin: '0 0 6px 0',
-                  letterSpacing: '0.5px'
+                  margin: '0 0 4px 0',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase'
                 }}
               >
-                Company Name
+                Company
               </h3>
               <p 
                 style={{ 
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  color: '#4b5563',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#059669',
                   margin: '0 0 6px 0',
-                  lineHeight: '1.3'
+                  lineHeight: '1.2'
                 }}
               >
                 {company.name}
               </p>
               <div 
                 style={{ 
-                  width: '200px', 
+                  width: '180px', 
                   height: '1px',
                   background: 'repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px)',
                   margin: '0 auto'
@@ -452,13 +590,13 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
         ) : (
           <>
             {/* Arabic Version */}
-            <div style={{ marginBottom: '22px', direction: 'rtl' }}>
+            <div style={{ marginBottom: '18px', direction: 'rtl' }}>
               <h3 
                 style={{ 
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
                   color: '#1f2937',
-                  margin: '0 0 6px 0',
+                  margin: '0 0 4px 0',
                   letterSpacing: '0.5px'
                 }}
               >
@@ -466,18 +604,18 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
               </h3>
               <p 
                 style={{ 
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  color: '#4b5563',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#2563eb',
                   margin: '0 0 6px 0',
-                  lineHeight: '1.3'
+                  lineHeight: '1.2'
                 }}
               >
                 {employee.firstName} {employee.lastName}
               </p>
               <div 
                 style={{ 
-                  width: '200px', 
+                  width: '180px', 
                   height: '1px',
                   background: 'repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px)',
                   margin: '0 auto'
@@ -485,13 +623,13 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
               />
             </div>
 
-            <div style={{ marginBottom: '22px', direction: 'rtl' }}>
+            <div style={{ marginBottom: '18px', direction: 'rtl' }}>
               <h3 
                 style={{ 
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
                   color: '#1f2937',
-                  margin: '0 0 6px 0',
+                  margin: '0 0 4px 0',
                   letterSpacing: '0.5px'
                 }}
               >
@@ -503,14 +641,14 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
                   fontWeight: '500',
                   color: '#4b5563',
                   margin: '0 0 6px 0',
-                  lineHeight: '1.3'
+                  lineHeight: '1.2'
                 }}
               >
                 {employee.position}
               </p>
               <div 
                 style={{ 
-                  width: '200px', 
+                  width: '180px', 
                   height: '1px',
                   background: 'repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px)',
                   margin: '0 auto'
@@ -518,13 +656,13 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
               />
             </div>
 
-            <div style={{ marginBottom: '22px', direction: 'rtl' }}>
+            <div style={{ marginBottom: '18px', direction: 'rtl' }}>
               <h3 
                 style={{ 
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
                   color: '#1f2937',
-                  margin: '0 0 6px 0',
+                  margin: '0 0 4px 0',
                   letterSpacing: '0.5px'
                 }}
               >
@@ -532,20 +670,20 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
               </h3>
               <p 
                 style={{ 
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  color: '#4b5563',
+                  fontSize: '16px',
+                  fontWeight: '700',
+                  color: '#dc2626',
                   margin: '0 0 6px 0',
                   fontFamily: 'monospace',
                   letterSpacing: '1px',
-                  lineHeight: '1.3'
+                  lineHeight: '1.2'
                 }}
               >
                 {employee.id.substring(0, 8).toUpperCase()}
               </p>
               <div 
                 style={{ 
-                  width: '200px', 
+                  width: '180px', 
                   height: '1px',
                   background: 'repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px)',
                   margin: '0 auto'
@@ -556,29 +694,29 @@ export function EmployeeCardGenerator({ employee, company, onClose }: EmployeeCa
             <div style={{ marginBottom: '15px', direction: 'rtl' }}>
               <h3 
                 style={{ 
-                  fontSize: '16px',
+                  fontSize: '14px',
                   fontWeight: '700',
                   color: '#1f2937',
-                  margin: '0 0 6px 0',
+                  margin: '0 0 4px 0',
                   letterSpacing: '0.5px'
                 }}
               >
-                اســــم الشــــركة
+                الشــــركة
               </h3>
               <p 
                 style={{ 
-                  fontSize: '15px',
-                  fontWeight: '500',
-                  color: '#4b5563',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#059669',
                   margin: '0 0 6px 0',
-                  lineHeight: '1.3'
+                  lineHeight: '1.2'
                 }}
               >
                 {company.name}
               </p>
               <div 
                 style={{ 
-                  width: '200px', 
+                  width: '180px', 
                   height: '1px',
                   background: 'repeating-linear-gradient(to right, #9ca3af 0px, #9ca3af 2px, transparent 2px, transparent 6px)',
                   margin: '0 auto'

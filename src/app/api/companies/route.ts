@@ -37,9 +37,53 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     const skip = (page - 1) * limit;
 
     // Build where clause for filtering
-    const where: any = {
-      userId: request.user!.userId,
-    };
+    const where: any = {};
+    
+    // Super admins can see all companies
+    if (request.user!.role === 'SUPER_ADMIN') {
+      // No restrictions
+    } 
+    // Managers can only see their assigned companies
+    else if (request.user!.role === 'MANAGER') {
+      // Get user's assigned companies through both direct assignment and manager assignments
+      const user = await prisma.user.findUnique({
+        where: { id: request.user!.userId },
+        select: { 
+          assignedCompanyId: true,
+          managerAssignments: {
+            where: { isActive: true },
+            select: { companyId: true }
+          }
+        }
+      });
+      
+      const allowedCompanyIds: string[] = [];
+      
+      // Add direct assigned company
+      if (user?.assignedCompanyId) {
+        allowedCompanyIds.push(user.assignedCompanyId);
+      }
+      
+      // Add companies from manager assignments
+      if (user?.managerAssignments) {
+        allowedCompanyIds.push(...user.managerAssignments.map(assignment => assignment.companyId));
+      }
+      
+      if (allowedCompanyIds.length > 0) {
+        where.id = { in: allowedCompanyIds };
+      } else {
+        // If no assignments, return empty result
+        where.id = 'no-companies-assigned';
+      }
+    }
+    // Admins can only see companies they created
+    else if (request.user!.role === 'ADMIN') {
+      where.userId = request.user!.userId;
+    }
+    // Regular users can only see companies they created
+    else {
+      where.userId = request.user!.userId;
+    }
 
     if (search) {
       where.OR = [

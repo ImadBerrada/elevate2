@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withRole, AuthenticatedRequest } from '@/lib/middleware';
 
-// GET /api/users/stats - Get user statistics (Admin only)
-export const GET = withRole(['ADMIN', 'SUPER_ADMIN'])(async (request: AuthenticatedRequest) => {
+// GET /api/users/stats - Get user statistics (Manager and above)
+export const GET = withRole(['MANAGER', 'ADMIN', 'SUPER_ADMIN'])(async (request: AuthenticatedRequest) => {
   try {
     // Get total user count
     const total = await prisma.user.count();
@@ -36,19 +36,19 @@ export const GET = withRole(['ADMIN', 'SUPER_ADMIN'])(async (request: Authentica
     let users = 0;
     
     roleStats.forEach(stat => {
-      // Map database roles to frontend roles
-      if (stat.role === 'ADMIN' || stat.role === 'SUPER_ADMIN') {
+      // Map database roles to frontend display
+      if (stat.role === 'SUPER_ADMIN') {
+        byRole['SUPER_ADMIN'] = (byRole['SUPER_ADMIN'] || 0) + stat._count.id;
+        admins += stat._count.id;
+      } else if (stat.role === 'ADMIN') {
         byRole['ADMIN'] = (byRole['ADMIN'] || 0) + stat._count.id;
         admins += stat._count.id;
-        // Also count some admins as managers for frontend display
-        managers += Math.floor(stat._count.id * 0.3);
-        byRole['MANAGER'] = managers;
+      } else if (stat.role === 'MANAGER') {
+        byRole['MANAGER'] = (byRole['MANAGER'] || 0) + stat._count.id;
+        managers += stat._count.id;
       } else if (stat.role === 'USER') {
         byRole['USER'] = stat._count.id;
         users += stat._count.id;
-        // Also add some users as viewers for frontend display
-        const viewers = Math.floor(stat._count.id * 0.2);
-        byRole['VIEWER'] = viewers;
       }
     });
     

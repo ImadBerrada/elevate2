@@ -121,13 +121,29 @@ export default function HomePage() {
     // Check if user is authenticated
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('auth_token');
+      const userData = localStorage.getItem('user_data');
       
       if (!token) {
         // No token, redirect to login
         router.replace('/login');
       } else {
-        // Has token, redirect to dashboard
-        router.replace('/dashboard');
+        // Has token, check user role and redirect accordingly
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            if (user.role === 'MANAGER') {
+              router.replace('/manager-dashboard');
+            } else {
+              router.replace('/dashboard');
+            }
+          } catch (error) {
+            // If user data is invalid, redirect to dashboard
+            router.replace('/dashboard');
+          }
+        } else {
+          // No user data, redirect to dashboard
+          router.replace('/dashboard');
+        }
       }
     }
   }, [router]);

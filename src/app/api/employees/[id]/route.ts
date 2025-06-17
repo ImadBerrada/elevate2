@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
+import { withRole, AuthenticatedRequest } from '@/lib/middleware';
 import { z } from 'zod';
 
 // Validation schema for employee updates
@@ -23,17 +23,78 @@ const updateEmployeeSchema = z.object({
   avatar: z.string().optional(),
 });
 
+// Helper function to get manager's assigned company IDs
+async function getManagerAssignedCompanyIds(userId: string): Promise<string[]> {
+  const assignments = await prisma.managerAssignment.findMany({
+    where: {
+      userId: userId,
+      isActive: true,
+    },
+    select: {
+      companyId: true,
+    },
+  });
+  
+  const assignedCompanyIds = assignments.map(assignment => assignment.companyId);
+  
+  // Also check direct assignment
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { assignedCompanyId: true },
+  });
+  
+  if (user?.assignedCompanyId) {
+    assignedCompanyIds.push(user.assignedCompanyId);
+  }
+  
+  return [...new Set(assignedCompanyIds)]; // Remove duplicates
+}
+
+// Helper function to check if user can access employee
+async function canAccessEmployee(userId: string, userRole: string, employeeId: string): Promise<boolean> {
+  if (userRole === 'SUPER_ADMIN') {
+    return true; // Super admins can access all employees
+  }
+  
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { companyId: true, userId: true },
+  });
+  
+  if (!employee) {
+    return false;
+  }
+  
+  if (userRole === 'ADMIN') {
+    return employee.userId === userId;
+  }
+  
+  if (userRole === 'MANAGER') {
+    const assignedCompanyIds = await getManagerAssignedCompanyIds(userId);
+    return assignedCompanyIds.includes(employee.companyId);
+  }
+  
+  return false;
+}
+
 // GET /api/employees/[id] - Get a specific employee
-export const GET = withAuth(async (
+export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
-    const employee = await prisma.employee.findFirst({
-      where: {
-        id: params.id,
-        userId: request.user!.userId,
-      },
+    const { id } = await params;
+    
+    // Check if user can access this employee
+    if (!(await canAccessEmployee(request.user!.userId, request.user!.role, id))) {
+      return NextResponse.json(
+        { error: 'Employee not found' },
+        { status: 404 }
+      );
+    }
+    
+    const employee = await prisma.employee.findUnique({
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -79,11 +140,12 @@ export const GET = withAuth(async (
 });
 
 // PUT /api/employees/[id] - Update a specific employee
-export const PUT = withAuth(async (
+export const PUT = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
+    const { id } = await params;
     const body = await request.json();
     
     // Transform skills from comma-separated string to array if needed
@@ -96,12 +158,17 @@ export const PUT = withAuth(async (
 
     const validatedData = updateEmployeeSchema.parse(cleanBody);
 
-    // Check if employee exists and belongs to user
-    const existingEmployee = await prisma.employee.findFirst({
-      where: {
-        id: params.id,
-        userId: request.user!.userId,
-      },
+    // Check if user can access this employee
+    if (!(await canAccessEmployee(request.user!.userId, request.user!.role, id))) {
+      return NextResponse.json(
+        { error: 'Employee not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if employee exists
+    const existingEmployee = await prisma.employee.findUnique({
+      where: { id: id },
     });
 
     if (!existingEmployee) {
@@ -116,7 +183,7 @@ export const PUT = withAuth(async (
       const emailConflict = await prisma.employee.findFirst({
         where: {
           email: validatedData.email,
-          id: { not: params.id },
+          id: { not: id },
         },
       });
 
@@ -128,16 +195,26 @@ export const PUT = withAuth(async (
       }
     }
 
-    // If company is being changed, verify the new company exists and belongs to user
+    // If company is being changed, verify access to new company
     if (validatedData.companyId && validatedData.companyId !== existingEmployee.companyId) {
-      const newCompany = await prisma.company.findFirst({
-        where: {
-          id: validatedData.companyId,
-          userId: request.user!.userId,
-        },
-      });
+      let hasAccess = false;
+      
+      if (request.user!.role === 'SUPER_ADMIN') {
+        hasAccess = true;
+      } else if (request.user!.role === 'ADMIN') {
+        const company = await prisma.company.findFirst({
+          where: {
+            id: validatedData.companyId,
+            userId: request.user!.userId,
+          },
+        });
+        hasAccess = !!company;
+      } else if (request.user!.role === 'MANAGER') {
+        const assignedCompanyIds = await getManagerAssignedCompanyIds(request.user!.userId);
+        hasAccess = assignedCompanyIds.includes(validatedData.companyId);
+      }
 
-      if (!newCompany) {
+      if (!hasAccess) {
         return NextResponse.json(
           { error: 'New company not found or access denied' },
           { status: 400 }
@@ -167,7 +244,7 @@ export const PUT = withAuth(async (
     };
 
     const employee = await prisma.employee.update({
-      where: { id: params.id },
+      where: { id: id },
       data: updateData,
       include: {
         company: {
@@ -193,14 +270,16 @@ export const PUT = withAuth(async (
       ...employee,
       role: employee.position, // Map position to role for frontend
       companyName: employee.company.name,
-      actualCompanyName: employee.actualCompany?.name,
+      actualCompanyName: employee.actualCompany?.name || null,
     };
 
     return NextResponse.json(employeeWithCompany);
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('Validation errors:', error.errors);
+      const firstError = error.errors[0];
       return NextResponse.json(
-        { error: 'Validation failed', details: error.errors },
+        { error: firstError?.message || 'Validation failed', details: error.errors },
         { status: 400 }
       );
     }
@@ -214,17 +293,24 @@ export const PUT = withAuth(async (
 });
 
 // DELETE /api/employees/[id] - Delete a specific employee
-export const DELETE = withAuth(async (
+export const DELETE = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
-    // Check if employee exists and belongs to user
-    const existingEmployee = await prisma.employee.findFirst({
-      where: {
-        id: params.id,
-        userId: request.user!.userId,
-      },
+    const { id } = await params;
+    
+    // Check if user can access this employee
+    if (!(await canAccessEmployee(request.user!.userId, request.user!.role, id))) {
+      return NextResponse.json(
+        { error: 'Employee not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if employee exists
+    const existingEmployee = await prisma.employee.findUnique({
+      where: { id: id },
     });
 
     if (!existingEmployee) {
@@ -234,16 +320,20 @@ export const DELETE = withAuth(async (
       );
     }
 
-    // Delete the employee and update company employee count
-    await Promise.all([
-      prisma.employee.delete({
-        where: { id: params.id },
-      }),
-      prisma.company.update({
-        where: { id: existingEmployee.companyId },
-        data: { employeeCount: { decrement: 1 } },
-      }),
-    ]);
+    // Delete the employee
+    await prisma.employee.delete({
+      where: { id: id },
+    });
+
+    // Update company employee count
+    await prisma.company.update({
+      where: { id: existingEmployee.companyId },
+      data: {
+        employeeCount: {
+          decrement: 1,
+        },
+      },
+    });
 
     return NextResponse.json({ message: 'Employee deleted successfully' });
   } catch (error) {

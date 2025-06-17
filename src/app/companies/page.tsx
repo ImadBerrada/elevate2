@@ -41,6 +41,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useAuth } from "@/contexts/auth-context";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { ImageUpload } from "@/components/ui/image-upload";
@@ -106,6 +107,13 @@ interface CompanyFormData {
 
 export default function CompaniesPage() {
   const { isOpen, isMobile, isTablet, isDesktop } = useSidebar();
+  const { user } = useAuth();
+  const [managerPermissions, setManagerPermissions] = useState({
+    canManageAssets: false,
+    canModifyCompanies: false,
+    canCreateCompanies: false,
+    canDeleteCompanies: false,
+  });
   const [companies, setCompanies] = useState<Company[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,6 +129,10 @@ export default function CompaniesPage() {
   const [selectedCompanyForAssets, setSelectedCompanyForAssets] = useState<Company | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [industrySearchTerm, setIndustrySearchTerm] = useState("");
+  const [isAddIndustryOpen, setIsAddIndustryOpen] = useState(false);
+  const [newIndustryName, setNewIndustryName] = useState("");
+  const [customIndustries, setCustomIndustries] = useState<string[]>([]);
   const [companyData, setCompanyData] = useState<CompanyFormData>({
     name: "",
     description: "",
@@ -139,10 +151,106 @@ export default function CompaniesPage() {
     tradeLicenseDocument: ""
   });
 
+  // Default industries list
+  const defaultIndustries = [
+    "Technology",
+    "Finance", 
+    "Healthcare",
+    "Energy",
+    "Manufacturing",
+    "Retail",
+    "Education",
+    "Real Estate",
+    "Entertainment & Events",
+    "Hospitality",
+    "Construction",
+    "Transportation",
+    "Agriculture",
+    "Media & Communications",
+    "Professional Services",
+    "Non-Profit",
+    "Government",
+    "Food & Beverage"
+  ];
+
+  // Combined industries list (default + custom)
+  const allIndustries = [...defaultIndustries, ...customIndustries];
+
+  // Filtered industries based on search
+  const filteredIndustries = allIndustries.filter(industry =>
+    industry.toLowerCase().includes(industrySearchTerm.toLowerCase())
+  );
+
+  // For managers, companies are already filtered in fetchManagerCompanies
+  // For admins/super admins, apply filters here
+  const filteredCompanies = user?.role === 'MANAGER' 
+    ? companies 
+    : companies.filter(company => {
+        const matchesSearch = !searchTerm || 
+          company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          company.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          company.industry.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          company.location.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        const matchesIndustry = industryFilter === 'ALL' || company.industry === industryFilter;
+        const matchesStatus = statusFilter === 'ALL' || company.status === statusFilter;
+        
+        return matchesSearch && matchesIndustry && matchesStatus;
+      });
+
   useEffect(() => {
     fetchCompanies();
     fetchEmployees();
-  }, []);
+    if (user?.role === 'MANAGER') {
+      fetchManagerPermissions();
+    }
+  }, [user]);
+
+  const fetchManagerPermissions = async () => {
+    try {
+      if (!user?.id) return;
+      
+      const data = await apiClient.getManagerAssignments({
+        userId: user.id
+      });
+      
+      if (data.assignments && data.assignments.length > 0) {
+        const permissions = data.assignments[0].permissions || {};
+        setManagerPermissions({
+          canManageAssets: permissions.canManageAssets || false,
+          canModifyCompanies: permissions.canModifyCompanies || false,
+          canCreateCompanies: permissions.canCreateCompanies || false,
+          canDeleteCompanies: permissions.canDeleteCompanies || false,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch manager permissions:', error);
+    }
+  };
+
+  // Helper function to check if user can perform action
+  const canPerformAction = (action: 'create' | 'modify' | 'delete' | 'manageAssets'): boolean => {
+    if (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') {
+      return true;
+    }
+    
+    if (user?.role === 'MANAGER') {
+      switch (action) {
+        case 'create':
+          return managerPermissions.canCreateCompanies;
+        case 'modify':
+          return managerPermissions.canModifyCompanies;
+        case 'delete':
+          return managerPermissions.canDeleteCompanies;
+        case 'manageAssets':
+          return managerPermissions.canManageAssets;
+        default:
+          return false;
+      }
+    }
+    
+    return false;
+  };
 
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
@@ -155,18 +263,25 @@ export default function CompaniesPage() {
   const fetchCompanies = async () => {
     try {
       setLoading(true);
-      const params = {
-        limit: 100,
-        ...(searchTerm && { search: searchTerm }),
-        ...(industryFilter !== 'ALL' && { industry: industryFilter }),
-        ...(statusFilter !== 'ALL' && { status: statusFilter }),
-      };
-
-      const data = await apiClient.getCompanies(params);
-      setCompanies(data.companies || []);
       
-      // Auto-create MARAH company if it doesn't exist
-      await ensureMarahCompanyExists(data.companies || []);
+      // For managers, fetch only their assigned companies
+      if (user?.role === 'MANAGER') {
+        await fetchManagerCompanies();
+      } else {
+        // For admins and super admins, fetch all companies
+        const params = {
+          limit: 100,
+          ...(searchTerm && { search: searchTerm }),
+          ...(industryFilter !== 'ALL' && { industry: industryFilter }),
+          ...(statusFilter !== 'ALL' && { status: statusFilter }),
+        };
+
+        const data = await apiClient.getCompanies(params);
+        setCompanies(data.companies || []);
+        
+        // Auto-create MARAH company if it doesn't exist
+        await ensureMarahCompanyExists(data.companies || []);
+      }
     } catch (err) {
       console.error('Failed to fetch companies:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch companies');
@@ -175,16 +290,99 @@ export default function CompaniesPage() {
     }
   };
 
+  const fetchManagerCompanies = async () => {
+    try {
+      if (!user?.id) return;
+      
+      // Use API client to get manager assignments
+      const data = await apiClient.getManagerAssignments({
+        userId: user.id
+      });
+      
+      const assignedCompanyIds = data.assignments?.map((assignment: any) => assignment.companyId) || [];
+      
+      if (assignedCompanyIds.length > 0) {
+        // Fetch details for assigned companies using the main companies endpoint
+        // This will automatically filter to only show assigned companies for managers
+        const companiesData = await apiClient.getCompanies({ limit: 1000 });
+        
+        // Apply additional filters if needed
+        let filteredCompanies = companiesData.companies;
+        
+        if (searchTerm) {
+          filteredCompanies = filteredCompanies.filter(company => 
+            company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            company.email.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        }
+        
+        if (industryFilter !== 'ALL') {
+          filteredCompanies = filteredCompanies.filter(company => 
+            company.industry === industryFilter
+          );
+        }
+        
+        if (statusFilter !== 'ALL') {
+          filteredCompanies = filteredCompanies.filter(company => 
+            company.status === statusFilter
+          );
+        }
+        
+        setCompanies(filteredCompanies);
+        
+        // Fetch employees for assigned companies
+        await fetchManagerEmployees(assignedCompanyIds);
+      } else {
+        setCompanies([]);
+      }
+    } catch (error) {
+      console.error('Error fetching manager companies:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch companies');
+      setCompanies([]);
+    }
+  };
+
+  const fetchManagerEmployees = async (companyIds: string[]) => {
+    try {
+      const employeePromises = companyIds.map(companyId => 
+        apiClient.getEmployees({ companyId, limit: 1000 }).catch(err => {
+          console.error(`Failed to fetch employees for company ${companyId}:`, err);
+          return { employees: [] };
+        })
+      );
+      
+      const employeeResults = await Promise.all(employeePromises);
+      const allEmployees = employeeResults.flatMap(result => result.employees || []);
+      setEmployees(allEmployees);
+    } catch (error) {
+      console.error('Error fetching manager employees:', error);
+      setEmployees([]);
+    }
+  };
+
   const fetchEmployees = async () => {
     try {
-      const data = await apiClient.getEmployees({ limit: 1000 });
-      setEmployees(data.employees || []);
+      if (user?.role === 'MANAGER') {
+        // For managers, only fetch employees from their assigned companies
+        // We'll fetch this after we have the company data
+        setEmployees([]);
+      } else {
+        // For admins and super admins, fetch all employees
+        const data = await apiClient.getEmployees({ limit: 1000 });
+        setEmployees(data.employees || []);
+      }
     } catch (err) {
       console.error('Failed to fetch employees:', err);
     }
   };
 
   const ensureMarahCompanyExists = async (companies: Company[]) => {
+    // Only auto-create MARAH for super admins and admins, not for managers
+    const userRole = user?.role;
+    if (userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+      return; // Managers should only see their assigned companies
+    }
+    
     const marahExists = companies.some(company => company.name === 'MARAH Inflatable Games Rental');
     
     if (!marahExists) {
@@ -374,8 +572,6 @@ export default function CompaniesPage() {
     return employees.filter(emp => emp.companyId === companyId);
   };
 
-  const filteredCompanies = companies;
-
   const isMarahCompany = (company: Company) => {
     return company.name === 'MARAH Inflatable Games Rental';
   };
@@ -383,6 +579,54 @@ export default function CompaniesPage() {
   const getMarahCompany = () => {
     return companies.find(company => isMarahCompany(company));
   };
+
+  const handleAddIndustry = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!newIndustryName.trim()) {
+      setError("Industry name is required");
+      return;
+    }
+
+    // Check if industry already exists
+    if (allIndustries.some(industry => 
+      industry.toLowerCase() === newIndustryName.trim().toLowerCase()
+    )) {
+      setError("This industry already exists");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setError(null);
+
+      // Add to custom industries
+      setCustomIndustries(prev => [...prev, newIndustryName.trim()]);
+      
+      // Set as selected industry
+      setCompanyData(prev => ({ ...prev, industry: newIndustryName.trim() }));
+      
+      // Save to localStorage for persistence
+      const savedIndustries = JSON.parse(localStorage.getItem('customIndustries') || '[]');
+      savedIndustries.push(newIndustryName.trim());
+      localStorage.setItem('customIndustries', JSON.stringify(savedIndustries));
+      
+      // Reset and close
+      setNewIndustryName("");
+      setIsAddIndustryOpen(false);
+      
+    } catch (err) {
+      console.error('Failed to add industry:', err);
+      setError(err instanceof Error ? err.message : 'Failed to add industry');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Load custom industries from localStorage on component mount
+  useEffect(() => {
+    const savedIndustries = JSON.parse(localStorage.getItem('customIndustries') || '[]');
+    setCustomIndustries(savedIndustries);
+  }, []);
 
   if (loading) {
     return (
@@ -450,11 +694,46 @@ export default function CompaniesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">All Industries</SelectItem>
-                    <SelectItem value="Technology">Technology</SelectItem>
-                    <SelectItem value="Finance">Finance</SelectItem>
-                    <SelectItem value="Healthcare">Healthcare</SelectItem>
-                    <SelectItem value="Energy">Energy</SelectItem>
-                    <SelectItem value="Manufacturing">Manufacturing</SelectItem>
+                    <div className="border-t border-border/50 my-2"></div>
+                    <div className="flex items-center px-3 pb-2">
+                      <Search className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <Input
+                        placeholder="Search industries..."
+                        value={industrySearchTerm}
+                        onChange={(e) => setIndustrySearchTerm(e.target.value)}
+                        className="h-8 border-none focus:ring-0 focus:ring-offset-0"
+                      />
+                    </div>
+                    <div className="border-t border-border/50 mb-2"></div>
+                    <div className="px-2 pb-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start text-left border-dashed border-primary/50 text-primary hover:bg-primary/5"
+                        onClick={() => setIsAddIndustryOpen(true)}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add New Industry
+                      </Button>
+                    </div>
+                    {filteredIndustries.length > 0 ? (
+                      filteredIndustries.map((industry) => (
+                        <SelectItem key={industry} value={industry}>
+                          <div className="flex items-center">
+                            <Briefcase className="w-4 h-4 mr-2" />
+                            <span>{industry}</span>
+                            {customIndustries.includes(industry) && (
+                              <Badge variant="secondary" className="ml-2 text-xs">Custom</Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : industrySearchTerm ? (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        No industries found matching "{industrySearchTerm}"
+                      </div>
+                    ) : null}
                   </SelectContent>
                 </Select>
 
@@ -494,13 +773,14 @@ export default function CompaniesPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <Dialog open={isAddCompanyOpen} onOpenChange={setIsAddCompanyOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="btn-premium h-11 w-full sm:w-auto">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Company
-                    </Button>
-                  </DialogTrigger>
+                {canPerformAction('create') && (
+                  <Dialog open={isAddCompanyOpen} onOpenChange={setIsAddCompanyOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="btn-premium h-11 w-full sm:w-auto">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Company
+                      </Button>
+                    </DialogTrigger>
                   <DialogContent className="sm:max-w-[600px] glass-card border-refined max-h-[90vh] overflow-hidden">
                     <DialogHeader>
                       <DialogTitle className="text-xl font-elegant text-gradient">Add New Company</DialogTitle>
@@ -540,14 +820,45 @@ export default function CompaniesPage() {
                                 <SelectValue placeholder="Select industry" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="Technology">Technology</SelectItem>
-                                <SelectItem value="Finance">Finance</SelectItem>
-                                <SelectItem value="Healthcare">Healthcare</SelectItem>
-                                <SelectItem value="Energy">Energy</SelectItem>
-                                <SelectItem value="Manufacturing">Manufacturing</SelectItem>
-                                <SelectItem value="Retail">Retail</SelectItem>
-                                <SelectItem value="Education">Education</SelectItem>
-                                <SelectItem value="Real Estate">Real Estate</SelectItem>
+                                <div className="flex items-center px-3 pb-2">
+                                  <Search className="w-4 h-4 mr-2 text-muted-foreground" />
+                                  <Input
+                                    placeholder="Search industries..."
+                                    value={industrySearchTerm}
+                                    onChange={(e) => setIndustrySearchTerm(e.target.value)}
+                                    className="h-8 border-none focus:ring-0 focus:ring-offset-0"
+                                  />
+                                </div>
+                                <div className="border-t border-border/50 mb-2"></div>
+                                <div className="px-2 pb-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full justify-start text-left border-dashed border-primary/50 text-primary hover:bg-primary/5"
+                                    onClick={() => setIsAddIndustryOpen(true)}
+                                  >
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    Add New Industry
+                                  </Button>
+                                </div>
+                                {filteredIndustries.length > 0 ? (
+                                  filteredIndustries.map((industry) => (
+                                    <SelectItem key={industry} value={industry}>
+                                      <div className="flex items-center">
+                                        <Briefcase className="w-4 h-4 mr-2" />
+                                        <span>{industry}</span>
+                                        {customIndustries.includes(industry) && (
+                                          <Badge variant="secondary" className="ml-2 text-xs">Custom</Badge>
+                                        )}
+                                      </div>
+                                    </SelectItem>
+                                  ))
+                                ) : industrySearchTerm ? (
+                                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                                    No industries found matching "{industrySearchTerm}"
+                                  </div>
+                                ) : null}
                               </SelectContent>
                             </Select>
                           </div>
@@ -798,6 +1109,7 @@ export default function CompaniesPage() {
                     </div>
                   </DialogContent>
                 </Dialog>
+                )}
               </div>
             </div>
           </motion.div>
@@ -983,30 +1295,34 @@ export default function CompaniesPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditCompany(company);
-                              }}
-                              title="Edit Company"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="h-8 w-8 p-0 hover:bg-purple-100 hover:text-purple-700"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleManageAssets(company);
-                              }}
-                              title="Manage Assets"
-                            >
-                              <Briefcase className="w-4 h-4" />
-                            </Button>
+                            {canPerformAction('modify') && (
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditCompany(company);
+                                }}
+                                title="Edit Company"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {canPerformAction('manageAssets') && (
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="h-8 w-8 p-0 hover:bg-purple-100 hover:text-purple-700"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleManageAssets(company);
+                                }}
+                                title="Manage Assets"
+                              >
+                                <Briefcase className="w-4 h-4" />
+                              </Button>
+                            )}
                             {isMarahCompany(company) && (
                               <Button 
                                 size="sm" 
@@ -1022,18 +1338,20 @@ export default function CompaniesPage() {
                               </Button>
                             )}
                           </div>
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-700"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteCompany(company.id);
-                            }}
-                            title="Delete Company"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {canPerformAction('delete') && (
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteCompany(company.id);
+                              }}
+                              title="Delete Company"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       </motion.div>
                     ))}
@@ -1114,30 +1432,34 @@ export default function CompaniesPage() {
                                     >
                                       <Eye className="w-4 h-4" />
                                     </Button>
-                                    <Button 
-                                      size="sm" 
-                                      variant="ghost" 
-                                      className="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEditCompany(company);
-                                      }}
-                                      title="Edit Company"
-                                    >
-                                      <Edit className="w-4 h-4" />
-                                    </Button>
-                                    <Button 
-                                      size="sm" 
-                                      variant="ghost" 
-                                      className="h-8 w-8 p-0 hover:bg-purple-100 hover:text-purple-700"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleManageAssets(company);
-                                      }}
-                                      title="Manage Assets"
-                                    >
-                                      <Briefcase className="w-4 h-4" />
-                                    </Button>
+                                    {canPerformAction('modify') && (
+                                      <Button 
+                                        size="sm" 
+                                        variant="ghost" 
+                                        className="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEditCompany(company);
+                                        }}
+                                        title="Edit Company"
+                                      >
+                                        <Edit className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                    {canPerformAction('manageAssets') && (
+                                      <Button 
+                                        size="sm" 
+                                        variant="ghost" 
+                                        className="h-8 w-8 p-0 hover:bg-purple-100 hover:text-purple-700"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleManageAssets(company);
+                                        }}
+                                        title="Manage Assets"
+                                      >
+                                        <Briefcase className="w-4 h-4" />
+                                      </Button>
+                                    )}
                                     {isMarahCompany(company) && (
                                       <Button 
                                         size="sm" 
@@ -1152,18 +1474,20 @@ export default function CompaniesPage() {
                                         <Gamepad2 className="w-4 h-4" />
                                       </Button>
                                     )}
-                                    <Button 
-                                      size="sm" 
-                                      variant="ghost" 
-                                      className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-700"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteCompany(company.id);
-                                      }}
-                                      title="Delete Company"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    {canPerformAction('delete') && (
+                                      <Button 
+                                        size="sm" 
+                                        variant="ghost" 
+                                        className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-700"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteCompany(company.id);
+                                        }}
+                                        title="Delete Company"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    )}
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -1422,14 +1746,45 @@ export default function CompaniesPage() {
                           <SelectValue placeholder="Select industry" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Technology">Technology</SelectItem>
-                          <SelectItem value="Finance">Finance</SelectItem>
-                          <SelectItem value="Healthcare">Healthcare</SelectItem>
-                          <SelectItem value="Energy">Energy</SelectItem>
-                          <SelectItem value="Manufacturing">Manufacturing</SelectItem>
-                          <SelectItem value="Retail">Retail</SelectItem>
-                          <SelectItem value="Education">Education</SelectItem>
-                          <SelectItem value="Real Estate">Real Estate</SelectItem>
+                          <div className="flex items-center px-3 pb-2">
+                            <Search className="w-4 h-4 mr-2 text-muted-foreground" />
+                            <Input
+                              placeholder="Search industries..."
+                              value={industrySearchTerm}
+                              onChange={(e) => setIndustrySearchTerm(e.target.value)}
+                              className="h-8 border-none focus:ring-0 focus:ring-offset-0"
+                            />
+                          </div>
+                          <div className="border-t border-border/50 mb-2"></div>
+                          <div className="px-2 pb-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="w-full justify-start text-left border-dashed border-primary/50 text-primary hover:bg-primary/5"
+                              onClick={() => setIsAddIndustryOpen(true)}
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add New Industry
+                            </Button>
+                          </div>
+                          {filteredIndustries.length > 0 ? (
+                            filteredIndustries.map((industry) => (
+                              <SelectItem key={industry} value={industry}>
+                                <div className="flex items-center">
+                                  <Briefcase className="w-4 h-4 mr-2" />
+                                  <span>{industry}</span>
+                                  {customIndustries.includes(industry) && (
+                                    <Badge variant="secondary" className="ml-2 text-xs">Custom</Badge>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))
+                          ) : industrySearchTerm ? (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">
+                              No industries found matching "{industrySearchTerm}"
+                            </div>
+                          ) : null}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1697,6 +2052,72 @@ export default function CompaniesPage() {
                   />
                 )}
               </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Add Industry Dialog */}
+          <Dialog open={isAddIndustryOpen} onOpenChange={setIsAddIndustryOpen}>
+            <DialogContent className="sm:max-w-[400px] glass-card border-refined">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-elegant text-gradient">Add New Industry</DialogTitle>
+                <DialogDescription className="text-refined">
+                  Create a new industry category for your companies.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleAddIndustry} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="industry-name" className="text-sm font-medium">Industry Name *</Label>
+                  <Input
+                    id="industry-name"
+                    placeholder="e.g., Artificial Intelligence, Blockchain, Renewable Energy..."
+                    value={newIndustryName}
+                    onChange={(e) => setNewIndustryName(e.target.value)}
+                    className="border-refined"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter a unique industry name that will be available for all future companies.
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-red-600 text-sm">{error}</p>
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-3">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
+                      setIsAddIndustryOpen(false);
+                      setNewIndustryName("");
+                      setError(null);
+                    }}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    className="btn-premium"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Industry
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
             </DialogContent>
           </Dialog>
         </main>

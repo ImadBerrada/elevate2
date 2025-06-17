@@ -15,11 +15,12 @@ const updateDriverSchema = z.object({
 
 async function getHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const driver = await prisma.marahDriver.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         orders: {
           include: {
@@ -79,15 +80,16 @@ async function getHandler(
 
 async function putHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const validatedData = updateDriverSchema.parse(body);
 
     // Get the driver first to verify ownership
     const existingDriver = await prisma.marahDriver.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -108,7 +110,7 @@ async function putHandler(
 
     // Update the driver
     const updatedDriver = await prisma.marahDriver.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...validatedData,
         email: validatedData.email || null,
@@ -142,12 +144,13 @@ async function putHandler(
 
 async function deleteHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Get the driver first to verify ownership
     const existingDriver = await prisma.marahDriver.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -185,13 +188,13 @@ async function deleteHandler(
 
     // Unassign driver from all orders (set driverId to null)
     await prisma.marahOrder.updateMany({
-      where: { driverId: params.id },
+      where: { driverId: id },
       data: { driverId: null },
     });
 
     // Delete the driver
     await prisma.marahDriver.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ message: 'Driver deleted successfully' });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
+import { withRole, AuthenticatedRequest } from '@/lib/middleware';
 import { z } from 'zod';
 
 // Validation schema for employee creation
@@ -24,8 +24,35 @@ const createEmployeeSchema = z.object({
   avatar: z.string().optional(),
 });
 
+// Helper function to get manager's assigned company IDs
+async function getManagerAssignedCompanyIds(userId: string): Promise<string[]> {
+  const assignments = await prisma.managerAssignment.findMany({
+    where: {
+      userId: userId,
+      isActive: true,
+    },
+    select: {
+      companyId: true,
+    },
+  });
+  
+  const assignedCompanyIds = assignments.map(assignment => assignment.companyId);
+  
+  // Also check direct assignment
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { assignedCompanyId: true },
+  });
+  
+  if (user?.assignedCompanyId) {
+    assignedCompanyIds.push(user.assignedCompanyId);
+  }
+  
+  return [...new Set(assignedCompanyIds)]; // Remove duplicates
+}
+
 // GET /api/employees - List employees with filtering and pagination
-export const GET = withAuth(async (request: AuthenticatedRequest) => {
+export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -40,9 +67,35 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     const skip = (page - 1) * limit;
 
     // Build where clause for filtering
-    const where: any = {
-      userId: request.user!.userId,
-    };
+    const where: any = {};
+
+    // Role-based filtering
+    if (request.user!.role === 'SUPER_ADMIN') {
+      // Super admins can see all employees
+    } else if (request.user!.role === 'ADMIN') {
+      // Admins can see employees from their companies
+      where.userId = request.user!.userId;
+    } else if (request.user!.role === 'MANAGER') {
+      // Managers can only see employees from their assigned companies
+      const assignedCompanyIds = await getManagerAssignedCompanyIds(request.user!.userId);
+      
+      if (assignedCompanyIds.length === 0) {
+        // Manager has no assigned companies, return empty result
+        return NextResponse.json({
+          employees: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            pages: 0,
+          },
+        });
+      }
+      
+      where.companyId = {
+        in: assignedCompanyIds,
+      };
+    }
 
     if (search) {
       where.OR = [
@@ -55,6 +108,16 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     }
 
     if (companyId) {
+      // If a specific company is requested, ensure manager has access to it
+      if (request.user!.role === 'MANAGER') {
+        const assignedCompanyIds = await getManagerAssignedCompanyIds(request.user!.userId);
+        if (!assignedCompanyIds.includes(companyId)) {
+          return NextResponse.json(
+            { error: 'Company access denied' },
+            { status: 403 }
+          );
+        }
+      }
       where.companyId = companyId;
     }
 
@@ -121,7 +184,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
 });
 
 // POST /api/employees - Create a new employee
-export const POST = withAuth(async (request: AuthenticatedRequest) => {
+export const POST = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();
     
@@ -147,13 +210,37 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       );
     }
 
-    // Verify that the company exists and belongs to the user
-    const company = await prisma.company.findFirst({
-      where: {
-        id: validatedData.companyId,
-        userId: request.user!.userId,
-      },
-    });
+    // Verify company access based on user role
+    let company = null;
+    
+    if (request.user!.role === 'SUPER_ADMIN') {
+      // Super admins can create employees for any company
+      company = await prisma.company.findUnique({
+        where: { id: validatedData.companyId },
+      });
+    } else if (request.user!.role === 'ADMIN') {
+      // Admins can create employees for their own companies
+      company = await prisma.company.findFirst({
+        where: {
+          id: validatedData.companyId,
+          userId: request.user!.userId,
+        },
+      });
+    } else if (request.user!.role === 'MANAGER') {
+      // Managers can only create employees for their assigned companies
+      const assignedCompanyIds = await getManagerAssignedCompanyIds(request.user!.userId);
+      
+      if (!assignedCompanyIds.includes(validatedData.companyId)) {
+        return NextResponse.json(
+          { error: 'Company access denied' },
+          { status: 403 }
+        );
+      }
+      
+      company = await prisma.company.findUnique({
+        where: { id: validatedData.companyId },
+      });
+    }
 
     if (!company) {
       return NextResponse.json(
@@ -165,12 +252,31 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
     // Verify actual company if provided
     let actualCompany = null;
     if (validatedData.actualCompanyId) {
-      actualCompany = await prisma.company.findFirst({
-        where: {
-          id: validatedData.actualCompanyId,
-          userId: request.user!.userId,
-        },
-      });
+      if (request.user!.role === 'SUPER_ADMIN') {
+        actualCompany = await prisma.company.findUnique({
+          where: { id: validatedData.actualCompanyId },
+        });
+      } else if (request.user!.role === 'ADMIN') {
+        actualCompany = await prisma.company.findFirst({
+          where: {
+            id: validatedData.actualCompanyId,
+            userId: request.user!.userId,
+          },
+        });
+      } else if (request.user!.role === 'MANAGER') {
+        const assignedCompanyIds = await getManagerAssignedCompanyIds(request.user!.userId);
+        
+        if (!assignedCompanyIds.includes(validatedData.actualCompanyId)) {
+          return NextResponse.json(
+            { error: 'Actual company access denied' },
+            { status: 403 }
+          );
+        }
+        
+        actualCompany = await prisma.company.findUnique({
+          where: { id: validatedData.actualCompanyId },
+        });
+      }
 
       if (!actualCompany) {
         return NextResponse.json(
@@ -180,13 +286,21 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       }
     }
 
+    // Determine the userId for the employee record
+    let employeeUserId = request.user!.userId;
+    
+    // For managers, use the company owner's userId
+    if (request.user!.role === 'MANAGER') {
+      employeeUserId = company.userId;
+    }
+
     // Create the employee
     const { role, ...employeeData } = validatedData;
     const employee = await prisma.employee.create({
       data: {
         ...employeeData,
         position: role, // Map role to position for database
-        userId: request.user!.userId,
+        userId: employeeUserId,
       },
       include: {
         company: {

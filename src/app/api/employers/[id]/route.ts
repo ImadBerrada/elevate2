@@ -4,11 +4,12 @@ import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
 import { employerSchema } from '@/lib/validations';
 
 // GET /api/employers/[id] - Get a specific employer
-export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
+    const { id } = await params;
     const employer = await prisma.employer.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: request.user!.userId,
       },
     });
@@ -31,8 +32,9 @@ export const GET = withAuth(async (request: AuthenticatedRequest, { params }: { 
 });
 
 // PUT /api/employers/[id] - Update a specific employer
-export const PUT = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const PUT = withAuth(async (request: AuthenticatedRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
+    const { id } = await params;
     const body = await request.json();
     
     // Validate input
@@ -41,7 +43,7 @@ export const PUT = withAuth(async (request: AuthenticatedRequest, { params }: { 
     // Check if employer exists and belongs to user
     const existingEmployer = await prisma.employer.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: request.user!.userId,
       },
     });
@@ -55,7 +57,7 @@ export const PUT = withAuth(async (request: AuthenticatedRequest, { params }: { 
     
     // Update employer
     const employer = await prisma.employer.update({
-      where: { id: params.id },
+      where: { id: id },
       data: validatedData,
     });
     
@@ -78,12 +80,13 @@ export const PUT = withAuth(async (request: AuthenticatedRequest, { params }: { 
 });
 
 // DELETE /api/employers/[id] - Delete a specific employer
-export const DELETE = withAuth(async (request: AuthenticatedRequest, { params }: { params: { id: string } }) => {
+export const DELETE = withAuth(async (request: AuthenticatedRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
+    const { id } = await params;
     // Check if employer exists and belongs to user
     const existingEmployer = await prisma.employer.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: request.user!.userId,
       },
     });
@@ -97,7 +100,7 @@ export const DELETE = withAuth(async (request: AuthenticatedRequest, { params }:
     
     // Delete employer
     await prisma.employer.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
     
     return NextResponse.json({ message: 'Employer deleted successfully' });

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
   Wrench, 
@@ -15,13 +16,24 @@ import {
   Eye,
   Edit,
   Settings,
-  TrendingUp
+  TrendingUp,
+  Menu,
+  MoreHorizontal,
+  Package,
+  Trash2,
+  FileText
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Sidebar } from "@/components/sidebar";
+import { useSidebar } from "@/contexts/sidebar-context";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -37,76 +49,95 @@ const staggerContainer = {
   }
 };
 
-export default function ApplianceMaintenance() {
-  const maintenanceSchedule = [
-    {
-      id: "MNT-APL-001",
-      appliance: "Central AC Unit - Carrier 24ABC636A003",
-      property: "Marina Tower Complex",
-      type: "Preventive",
-      priority: "medium",
-      status: "scheduled",
-      scheduledDate: "2024-01-25",
-      technician: "Ahmed Hassan",
-      estimatedDuration: "4 hours",
-      cost: "$450",
-      description: "Quarterly filter replacement and system inspection"
-    },
-    {
-      id: "MNT-APL-002",
-      appliance: "Elevator System - Otis Gen2-MRL",
-      property: "Business Bay Office Center",
-      type: "Corrective",
-      priority: "high",
-      status: "in-progress",
-      scheduledDate: "2024-01-22",
-      technician: "Omar Al-Rashid",
-      estimatedDuration: "6 hours",
-      cost: "$1,200",
-      description: "Door sensor malfunction repair"
-    },
-    {
-      id: "MNT-APL-003",
-      appliance: "Commercial Dishwasher - Hobart CXi-6",
-      property: "Downtown Retail Plaza",
-      type: "Emergency",
-      priority: "urgent",
-      status: "pending",
-      scheduledDate: "2024-01-21",
-      technician: "Sarah Johnson",
-      estimatedDuration: "3 hours",
-      cost: "$650",
-      description: "Water leak and heating element replacement"
-    },
-    {
-      id: "MNT-APL-004",
-      appliance: "Pool Filtration - Pentair IntelliFlo VSF",
-      property: "Jumeirah Villa Estate",
-      type: "Preventive",
-      priority: "low",
-      status: "completed",
-      scheduledDate: "2024-01-18",
-      technician: "David Chen",
-      estimatedDuration: "2 hours",
-      cost: "$200",
-      description: "Monthly cleaning and chemical balance check"
-    },
-    {
-      id: "MNT-APL-005",
-      appliance: "Fire Safety System - Honeywell NOTIFIER-3030",
-      property: "Marina Tower Complex",
-      type: "Preventive",
-      priority: "high",
-      status: "scheduled",
-      scheduledDate: "2024-01-28",
-      technician: "Maria Garcia",
-      estimatedDuration: "5 hours",
-      cost: "$800",
-      description: "Semi-annual system testing and sensor calibration"
-    }
-  ];
+interface Property {
+  id: string;
+  name: string;
+  address: string;
+  propertyType: {
+    name: string;
+  };
+}
 
-  const technicians = [
+interface Appliance {
+  id: string;
+  name: string;
+  brand: string;
+  model: string;
+  property: Property;
+  category: string;
+  condition: string;
+}
+
+interface MaintenanceTask {
+  id: string;
+  applianceId: string;
+  appliance: string;
+  property: string;
+  type: string;
+  priority: string;
+  status: string;
+  scheduledDate: string;
+  technician: string;
+  estimatedDuration: string;
+  cost: number;
+  description: string;
+  completedDate?: string;
+  notes?: string;
+}
+
+interface Technician {
+  name: string;
+  specialty: string;
+  activeJobs: number;
+  rating: number;
+  completedJobs: number;
+}
+
+export default function ApplianceMaintenance() {
+  const { toggle: toggleSidebar } = useSidebar();
+  const [maintenanceTasks, setMaintenanceTasks] = useState<MaintenanceTask[]>([]);
+  const [appliances, setAppliances] = useState<Appliance[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  // URL parameters for cross-page navigation
+  const [urlParams, setUrlParams] = useState({
+    appliance: '',
+    property: '',
+    createFor: ''
+  });
+  
+  // Filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [propertyFilter, setPropertyFilter] = useState("all");
+  
+  // Modal states
+  const [isNewMaintenanceOpen, setIsNewMaintenanceOpen] = useState(false);
+  const [isEditMaintenanceOpen, setIsEditMaintenanceOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<MaintenanceTask | null>(null);
+  
+  // Form data
+  const [newMaintenanceData, setNewMaintenanceData] = useState({
+    applianceId: "",
+    propertyId: "",
+    type: "Preventive",
+    priority: "medium",
+    status: "scheduled",
+    scheduledDate: "",
+    technician: "",
+    estimatedDuration: "",
+    cost: "",
+    description: "",
+    notes: ""
+  });
+
+  // Mock technicians data (could be moved to API later)
+  const technicians: Technician[] = [
     {
       name: "Ahmed Hassan",
       specialty: "HVAC Systems",
@@ -136,6 +167,191 @@ export default function ApplianceMaintenance() {
       completedJobs: 78
     }
   ];
+
+  useEffect(() => {
+    // Parse URL parameters
+    const params = new URLSearchParams(window.location.search);
+    const appliance = params.get('appliance') || '';
+    const property = params.get('property') || '';
+    const createFor = params.get('createFor') || '';
+    
+    setUrlParams({ appliance, property, createFor });
+    
+    // Set filters based on URL params
+    if (appliance) {
+      // Filter will be applied in the filtering logic
+    }
+    if (property) {
+      setPropertyFilter(property);
+    }
+    
+    fetchData();
+    
+    // Auto-open maintenance creation if createFor parameter exists
+    if (createFor) {
+      setNewMaintenanceData(prev => ({
+        ...prev,
+        applianceId: createFor,
+        propertyId: property
+      }));
+      setIsNewMaintenanceOpen(true);
+      setSuccess('Ready to schedule maintenance for selected appliance');
+      setTimeout(() => setSuccess(null), 3000);
+    }
+  }, []);
+
+  const fetchData = async () => {
+    await Promise.all([
+      fetchMaintenanceTasks(),
+      fetchAppliances(),
+      fetchProperties()
+    ]);
+    setLoading(false);
+  };
+
+  const fetchMaintenanceTasks = async () => {
+    try {
+      const response = await fetch('/api/real-estate/appliance-maintenance');
+      const data = await response.json();
+      
+      if (data.success) {
+        setMaintenanceTasks(data.maintenanceTasks);
+      } else {
+        setError('Failed to fetch maintenance tasks');
+      }
+    } catch (error) {
+      setError('Failed to fetch maintenance tasks');
+      console.error('Error fetching maintenance tasks:', error);
+    }
+  };
+
+  const fetchAppliances = async () => {
+    try {
+      const response = await fetch('/api/real-estate/appliances');
+      const data = await response.json();
+      
+      if (data.success) {
+        setAppliances(data.appliances);
+      } else {
+        setError('Failed to fetch appliances');
+      }
+    } catch (error) {
+      setError('Failed to fetch appliances');
+      console.error('Error fetching appliances:', error);
+    }
+  };
+
+  const fetchProperties = async () => {
+    try {
+      const response = await fetch('/api/real-estate/properties');
+      const data = await response.json();
+      
+      if (data.success) {
+        setProperties(data.properties);
+      } else {
+        setError('Failed to fetch properties');
+      }
+    } catch (error) {
+      setError('Failed to fetch properties');
+      console.error('Error fetching properties:', error);
+    }
+  };
+
+  const handleCreateMaintenance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('/api/real-estate/appliance-maintenance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...newMaintenanceData,
+          cost: newMaintenanceData.cost ? parseFloat(newMaintenanceData.cost) : undefined,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        await fetchMaintenanceTasks();
+        setIsNewMaintenanceOpen(false);
+        setNewMaintenanceData({
+          applianceId: "",
+          propertyId: "",
+          type: "Preventive",
+          priority: "medium",
+          status: "scheduled",
+          scheduledDate: "",
+          technician: "",
+          estimatedDuration: "",
+          cost: "",
+          description: "",
+          notes: ""
+        });
+        setSuccess('Maintenance task scheduled successfully');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(data.error || 'Failed to create maintenance task');
+      }
+    } catch (error) {
+      setError('Failed to create maintenance task');
+      console.error('Error creating maintenance task:', error);
+    }
+  };
+
+  const handleDeleteMaintenance = async (taskId: string) => {
+    if (!confirm('Are you sure you want to delete this maintenance task?')) return;
+    
+    try {
+      const response = await fetch(`/api/real-estate/appliance-maintenance/${taskId}`, {
+        method: 'DELETE',
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        await fetchMaintenanceTasks();
+        setSuccess('Maintenance task deleted successfully');
+        setTimeout(() => setSuccess(null), 3000);
+      } else {
+        setError(data.error || 'Failed to delete maintenance task');
+      }
+    } catch (error) {
+      setError('Failed to delete maintenance task');
+      console.error('Error deleting maintenance task:', error);
+    }
+  };
+
+  // Filtering logic
+  const filteredMaintenanceTasks = maintenanceTasks.filter((task) => {
+    const matchesSearch = 
+      task.appliance.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      task.property.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      task.technician.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      task.description.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === "all" || task.status === statusFilter;
+    const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
+    const matchesType = typeFilter === "all" || task.type === typeFilter;
+    const matchesProperty = propertyFilter === "all" || task.property === propertyFilter;
+    
+    // URL parameter filtering
+    const matchesUrlAppliance = !urlParams.appliance || task.appliance.toLowerCase().includes(urlParams.appliance.toLowerCase());
+    
+    return matchesSearch && matchesStatus && matchesPriority && matchesType && matchesProperty && matchesUrlAppliance;
+  });
+
+  // Statistics
+  const stats = {
+    total: maintenanceTasks.length,
+    scheduled: maintenanceTasks.filter(t => t.status === 'scheduled').length,
+    inProgress: maintenanceTasks.filter(t => t.status === 'in-progress').length,
+    pending: maintenanceTasks.filter(t => t.status === 'pending').length,
+    completed: maintenanceTasks.filter(t => t.status === 'completed').length,
+    urgent: maintenanceTasks.filter(t => t.priority === 'urgent').length,
+    totalCost: maintenanceTasks.reduce((sum, t) => sum + (t.cost || 0), 0)
+  };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -196,370 +412,566 @@ export default function ApplianceMaintenance() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+          <div className="text-center">
+            <Wrench className="h-12 w-12 mx-auto text-blue-500 animate-spin" />
+            <p className="mt-4 text-gray-600">Loading maintenance data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      
-      <div className="flex-1 flex flex-col">
-        <motion.header 
-          className="glass-header sticky top-0 z-50"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="container mx-auto px-8 py-6">
-            <div className="flex items-center justify-between">
-              <motion.div 
-                className="flex items-center space-x-4"
-                {...fadeInUp}
-                transition={{ delay: 0.2 }}
-              >
-                <div className="flex items-center space-x-3">
-                  <motion.div
-                    className="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center shadow-lg"
-                    whileHover={{ scale: 1.1, rotate: 10 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    <Wrench className="w-5 h-5 text-white" />
-                  </motion.div>
-                  <div>
-                    <h1 className="text-2xl font-bold text-gradient">Appliance Maintenance</h1>
-                    <p className="text-sm text-muted-foreground">Preventive maintenance and service scheduling</p>
-                  </div>
-                </div>
-              </motion.div>
-              
-              <motion.div 
-                className="flex items-center space-x-4"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input 
-                    placeholder="Search maintenance..." 
-                    className="pl-10 w-64 glass-card border-0 focus-premium"
-                  />
-                </div>
-                <Button variant="outline" className="glass-card border-0 hover-glow">
-                  <Filter className="w-4 h-4 mr-2" />
-                  Filter
-                </Button>
-                <Button className="btn-premium">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Schedule Maintenance
-                </Button>
-              </motion.div>
-            </div>
-          </div>
-        </motion.header>
-
-        <main className="flex-1 container mx-auto px-8 py-8">
-          {/* Stats Cards */}
-          <motion.div 
-            className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12"
-            variants={staggerContainer}
-            initial="initial"
-            animate="animate"
+      <div className="flex-1 bg-gradient-to-br from-blue-50 via-white to-indigo-50 overflow-hidden relative">
+        {/* Success/Error Messages */}
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg"
           >
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-blue-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Scheduled Tasks
-                  </CardTitle>
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">47</div>
-                  <p className="text-sm text-blue-600 font-medium">Next 30 days</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-yellow-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    In Progress
-                  </CardTitle>
-                  <Wrench className="h-5 w-5 text-yellow-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">12</div>
-                  <p className="text-sm text-yellow-600 font-medium">Active maintenance</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-green-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Completed Today
-                  </CardTitle>
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">8</div>
-                  <p className="text-sm text-green-600 font-medium">+2 vs yesterday</p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} className="hover-lift">
-              <Card className="card-premium border-0 bg-gradient-to-br from-purple-50/80 to-white/80">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Monthly Cost
-                  </CardTitle>
-                  <DollarSign className="h-5 w-5 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-gradient mb-2">$28.5K</div>
-                  <p className="text-sm text-green-600 font-medium">-12% vs last month</p>
-                </CardContent>
-              </Card>
-            </motion.div>
+            {success}
           </motion.div>
+        )}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg"
+          >
+            {error}
+          </motion.div>
+        )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-            {/* Technician Team */}
-            <motion.div 
-              {...fadeInUp}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="card-premium border-0">
-                <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <motion.div
-                      className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                      whileHover={{ scale: 1.1, rotate: 10 }}
-                    >
-                      <Users className="w-4 h-4 text-white" />
-                    </motion.div>
-                    <div>
-                      <CardTitle>Technician Team</CardTitle>
-                      <CardDescription>
-                        Active maintenance specialists
-                      </CardDescription>
-                    </div>
+        {/* Background Gradient */}
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-400/5 via-purple-400/5 to-indigo-400/5"></div>
+        
+        {/* Content */}
+        <div className="relative z-10 h-full overflow-y-auto">
+          {/* Compact Header */}
+          <motion.div 
+            className="bg-white/70 backdrop-blur-md border-b border-white/20 sticky top-0 z-50"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleSidebar}
+                    className="lg:hidden"
+                  >
+                    <Menu className="h-4 w-4" />
+                  </Button>
+                  <div>
+                    <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-600 bg-clip-text text-transparent">
+                      Appliance Maintenance
+                    </h1>
+                    <p className="text-sm text-gray-600">
+                      {filteredMaintenanceTasks.length} of {maintenanceTasks.length} maintenance tasks
+                    </p>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {technicians.map((tech, index) => (
-                      <motion.div 
-                        key={index}
-                        className="glass-card p-4 rounded-xl"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.5 + index * 0.1 }}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-foreground">{tech.name}</h4>
-                          <Badge variant="outline" className="text-xs">
-                            {tech.activeJobs} active
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2">{tech.specialty}</p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-yellow-600">★ {tech.rating}</span>
-                          <span className="text-sm text-muted-foreground">{tech.completedJobs} completed</span>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Maintenance Types */}
-            <motion.div 
-              className="lg:col-span-2"
-              {...fadeInUp}
-              transition={{ delay: 0.6 }}
-            >
-              <Card className="card-premium border-0">
-                <CardHeader>
-                  <div className="flex items-center space-x-3">
-                    <motion.div
-                      className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                      whileHover={{ scale: 1.1, rotate: 10 }}
-                    >
-                      <Settings className="w-4 h-4 text-white" />
-                    </motion.div>
-                    <div>
-                      <CardTitle>Maintenance Analytics</CardTitle>
-                      <CardDescription>
-                        Performance metrics and trends
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <h4 className="font-semibold text-foreground">By Type</h4>
-                      {[
-                        { type: "Preventive", count: 28, percentage: 60, color: "bg-blue-500" },
-                        { type: "Corrective", count: 12, percentage: 25, color: "bg-orange-500" },
-                        { type: "Emergency", count: 7, percentage: 15, color: "bg-red-500" }
-                      ].map((item, index) => (
-                        <motion.div 
-                          key={index}
-                          className="flex items-center justify-between"
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: 0.7 + index * 0.1 }}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-4 h-4 rounded-full ${item.color}`} />
-                            <span className="font-medium text-foreground">{item.type}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Settings className="h-4 w-4 mr-2" />
+                        Controls
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-80">
+                      <div className="p-4">
+                        <div className="space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium">Search</Label>
+                            <div className="relative mt-1">
+                              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                              <Input
+                                placeholder="Search maintenance tasks..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10"
+                              />
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-semibold text-foreground">{item.count}</p>
-                            <p className="text-sm text-muted-foreground">{item.percentage}%</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-sm font-medium">Status</Label>
+                              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                <SelectTrigger className="mt-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Status</SelectItem>
+                                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                                  <SelectItem value="in-progress">In Progress</SelectItem>
+                                  <SelectItem value="pending">Pending</SelectItem>
+                                  <SelectItem value="completed">Completed</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Priority</Label>
+                              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                                <SelectTrigger className="mt-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Priority</SelectItem>
+                                  <SelectItem value="urgent">Urgent</SelectItem>
+                                  <SelectItem value="high">High</SelectItem>
+                                  <SelectItem value="medium">Medium</SelectItem>
+                                  <SelectItem value="low">Low</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-semibold text-foreground mb-4">Performance</h4>
-                      <div className="space-y-3">
-                        <div className="glass-card p-3 rounded-lg">
-                          <p className="text-sm text-muted-foreground">Avg Response Time</p>
-                          <p className="text-lg font-bold text-gradient">2.4 hours</p>
-                        </div>
-                        <div className="glass-card p-3 rounded-lg">
-                          <p className="text-sm text-muted-foreground">Completion Rate</p>
-                          <p className="text-lg font-bold text-gradient">96.8%</p>
-                        </div>
-                        <div className="glass-card p-3 rounded-lg">
-                          <p className="text-sm text-muted-foreground">Customer Satisfaction</p>
-                          <p className="text-lg font-bold text-gradient">4.7/5</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-sm font-medium">Type</Label>
+                              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                                <SelectTrigger className="mt-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Types</SelectItem>
+                                  <SelectItem value="Preventive">Preventive</SelectItem>
+                                  <SelectItem value="Corrective">Corrective</SelectItem>
+                                  <SelectItem value="Emergency">Emergency</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium">Property</Label>
+                              <Select value={propertyFilter} onValueChange={setPropertyFilter}>
+                                <SelectTrigger className="mt-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Properties</SelectItem>
+                                  {properties.map((prop) => (
+                                    <SelectItem key={prop.id} value={prop.name}>
+                                      {prop.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
                         </div>
                       </div>
+                      <DropdownMenuSeparator />
+                      <div className="p-2">
+                        <Button
+                          onClick={() => window.location.href = '/real-estate/appliances/inventory'}
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start"
+                        >
+                          <Package className="h-4 w-4 mr-2" />
+                          View Inventory
+                        </Button>
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button 
+                    onClick={() => setIsNewMaintenanceOpen(true)}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Schedule Maintenance
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Main Content */}
+          <div className="p-6">
+            {/* Statistics Cards */}
+            <motion.div 
+              className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
+              variants={staggerContainer}
+              initial="initial"
+              animate="animate"
+            >
+              <motion.div variants={fadeInUp}>
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Scheduled</p>
+                        <p className="text-2xl font-bold text-blue-600">{stats.scheduled}</p>
+                      </div>
+                      <Calendar className="h-8 w-8 text-blue-500" />
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div variants={fadeInUp}>
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-yellow-50 to-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">In Progress</p>
+                        <p className="text-2xl font-bold text-yellow-600">{stats.inProgress}</p>
+                      </div>
+                      <Wrench className="h-8 w-8 text-yellow-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div variants={fadeInUp}>
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-red-50 to-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Urgent</p>
+                        <p className="text-2xl font-bold text-red-600">{stats.urgent}</p>
+                      </div>
+                      <AlertTriangle className="h-8 w-8 text-red-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div variants={fadeInUp}>
+                <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-white">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Cost</p>
+                        <p className="text-2xl font-bold text-green-600">${stats.totalCost.toLocaleString()}</p>
+                      </div>
+                      <DollarSign className="h-8 w-8 text-green-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </motion.div>
+
+            {/* Maintenance Tasks */}
+            <motion.div {...fadeInUp} transition={{ delay: 0.4 }}>
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Wrench className="h-5 w-5" />
+                    Maintenance Schedule
+                  </CardTitle>
+                  <CardDescription>
+                    Manage appliance maintenance tasks and schedules
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {filteredMaintenanceTasks.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Wrench className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No maintenance tasks found</h3>
+                      <p className="text-gray-600 mb-4">
+                        {maintenanceTasks.length === 0 
+                          ? "Start by scheduling your first maintenance task."
+                          : "Try adjusting your filters to see more results."
+                        }
+                      </p>
+                      <Button 
+                        onClick={() => setIsNewMaintenanceOpen(true)}
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Schedule Maintenance
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredMaintenanceTasks.map((task, index) => {
+                        const StatusIcon = getStatusIcon(task.status);
+                        return (
+                          <motion.div 
+                            key={task.id}
+                            className="border rounded-lg p-6 hover:shadow-md transition-shadow"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+                                  <StatusIcon className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h3 className="font-semibold text-lg">{task.id}</h3>
+                                    <Badge className={getPriorityBg(task.priority)}>
+                                      {task.priority}
+                                    </Badge>
+                                    <Badge className={getStatusBg(task.status)}>
+                                      {task.status}
+                                    </Badge>
+                                    <Badge variant="outline">
+                                      {task.type}
+                                    </Badge>
+                                  </div>
+                                  <p className="font-medium text-gray-900 mb-1">{task.appliance}</p>
+                                  <div className="flex items-center gap-4 text-sm text-gray-600 mb-2">
+                                    <span>{task.property}</span>
+                                    <span>•</span>
+                                    <span>Technician: {task.technician}</span>
+                                    <span>•</span>
+                                    <span>Duration: {task.estimatedDuration}</span>
+                                  </div>
+                                  <p className="text-sm text-gray-600">{task.description}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="text-right">
+                                <div className="grid grid-cols-2 gap-4 text-center mb-4">
+                                  <div>
+                                    <p className="text-sm text-gray-600">Scheduled Date</p>
+                                    <p className="font-semibold">{new Date(task.scheduledDate).toLocaleDateString()}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-gray-600">Estimated Cost</p>
+                                    <p className="text-lg font-bold text-green-600">${task.cost?.toLocaleString()}</p>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="outline" size="sm">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem>
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        View Details
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem>
+                                        <Edit className="h-4 w-4 mr-2" />
+                                        Edit Task
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={() => handleDeleteMaintenance(task.id)}
+                                        className="text-red-600"
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Delete Task
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
           </div>
+        </div>
 
-          {/* Maintenance Schedule */}
-          <motion.div 
-            {...fadeInUp}
-            transition={{ delay: 0.8 }}
-          >
-            <Card className="card-premium border-0">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <motion.div
-                    className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center"
-                    whileHover={{ scale: 1.1, rotate: 10 }}
+        {/* New Maintenance Dialog */}
+        <Dialog open={isNewMaintenanceOpen} onOpenChange={setIsNewMaintenanceOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Schedule New Maintenance</DialogTitle>
+              <DialogDescription>
+                Create a new maintenance task for an appliance
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateMaintenance} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Appliance</Label>
+                  <Select 
+                    value={newMaintenanceData.applianceId} 
+                    onValueChange={(value) => setNewMaintenanceData(prev => ({ ...prev, applianceId: value }))}
                   >
-                    <Calendar className="w-4 h-4 text-white" />
-                  </motion.div>
-                  <div>
-                    <CardTitle className="text-xl">Maintenance Schedule</CardTitle>
-                    <CardDescription>
-                      Upcoming and active maintenance tasks
-                    </CardDescription>
-                  </div>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select appliance" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {appliances.map((appliance) => (
+                        <SelectItem key={appliance.id} value={appliance.id}>
+                          {appliance.name} - {appliance.brand} {appliance.model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {maintenanceSchedule.map((task, index) => {
-                    const StatusIcon = getStatusIcon(task.status);
-                    return (
-                      <motion.div 
-                        key={task.id}
-                        className="glass-card p-6 rounded-2xl hover-lift group"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.9 + index * 0.1 }}
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <motion.div 
-                              className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center shadow-lg"
-                              whileHover={{ scale: 1.1, rotate: 10 }}
-                            >
-                              <StatusIcon className="w-6 h-6 text-white" />
-                            </motion.div>
-                            
-                            <div>
-                              <div className="flex items-center space-x-3 mb-1">
-                                <h3 className="font-semibold text-lg text-foreground">{task.id}</h3>
-                                <Badge 
-                                  className={`text-xs ${getPriorityBg(task.priority)}`}
-                                  variant="outline"
-                                >
-                                  {task.priority}
-                                </Badge>
-                                <Badge 
-                                  className={`text-xs ${getStatusBg(task.status)}`}
-                                  variant="outline"
-                                >
-                                  {task.status}
-                                </Badge>
-                                <Badge 
-                                  className={`text-xs ${getTypeColor(task.type) === 'text-red-600' ? 'bg-red-100 text-red-800' : 
-                                    getTypeColor(task.type) === 'text-orange-600' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}
-                                  variant="outline"
-                                >
-                                  {task.type}
-                                </Badge>
-                              </div>
-                              <p className="text-sm font-medium text-foreground mb-1">{task.appliance}</p>
-                              <div className="flex items-center space-x-4 text-sm text-muted-foreground mb-2">
-                                <span>{task.property}</span>
-                                <span>•</span>
-                                <span>Technician: {task.technician}</span>
-                                <span>•</span>
-                                <span>Duration: {task.estimatedDuration}</span>
-                              </div>
-                              <p className="text-sm text-muted-foreground">{task.description}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="text-right">
-                            <div className="grid grid-cols-2 gap-4 text-center mb-4">
-                              <div>
-                                <p className="text-sm text-muted-foreground">Scheduled Date</p>
-                                <p className="font-bold text-foreground">{task.scheduledDate}</p>
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">Estimated Cost</p>
-                                <p className="text-lg font-bold text-gradient">{task.cost}</p>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center space-x-2">
-                              <Button size="sm" className="btn-premium">
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Details
-                              </Button>
-                              <Button size="sm" variant="outline" className="glass-card border-0 hover-glow">
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
+                <div>
+                  <Label>Property</Label>
+                  <Select 
+                    value={newMaintenanceData.propertyId} 
+                    onValueChange={(value) => setNewMaintenanceData(prev => ({ ...prev, propertyId: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select property" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {properties.map((property) => (
+                        <SelectItem key={property.id} value={property.id}>
+                          {property.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </main>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label>Type</Label>
+                  <Select 
+                    value={newMaintenanceData.type} 
+                    onValueChange={(value) => setNewMaintenanceData(prev => ({ ...prev, type: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Preventive">Preventive</SelectItem>
+                      <SelectItem value="Corrective">Corrective</SelectItem>
+                      <SelectItem value="Emergency">Emergency</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Priority</Label>
+                  <Select 
+                    value={newMaintenanceData.priority} 
+                    onValueChange={(value) => setNewMaintenanceData(prev => ({ ...prev, priority: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Status</Label>
+                  <Select 
+                    value={newMaintenanceData.status} 
+                    onValueChange={(value) => setNewMaintenanceData(prev => ({ ...prev, status: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label>Scheduled Date</Label>
+                  <Input
+                    type="date"
+                    value={newMaintenanceData.scheduledDate}
+                    onChange={(e) => setNewMaintenanceData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label>Estimated Duration</Label>
+                  <Input
+                    placeholder="e.g., 2 hours"
+                    value={newMaintenanceData.estimatedDuration}
+                    onChange={(e) => setNewMaintenanceData(prev => ({ ...prev, estimatedDuration: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Estimated Cost</Label>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={newMaintenanceData.cost}
+                    onChange={(e) => setNewMaintenanceData(prev => ({ ...prev, cost: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Technician</Label>
+                <Select 
+                  value={newMaintenanceData.technician} 
+                  onValueChange={(value) => setNewMaintenanceData(prev => ({ ...prev, technician: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select technician" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {technicians.map((tech) => (
+                      <SelectItem key={tech.name} value={tech.name}>
+                        {tech.name} - {tech.specialty}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  placeholder="Describe the maintenance work to be performed..."
+                  value={newMaintenanceData.description}
+                  onChange={(e) => setNewMaintenanceData(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <Label>Notes (Optional)</Label>
+                <Textarea
+                  placeholder="Additional notes or special instructions..."
+                  value={newMaintenanceData.notes}
+                  onChange={(e) => setNewMaintenanceData(prev => ({ ...prev, notes: e.target.value }))}
+                  rows={2}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsNewMaintenanceOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-gradient-to-r from-blue-600 to-indigo-600">
+                  Schedule Maintenance
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

@@ -14,11 +14,12 @@ const updateCustomerSchema = z.object({
 
 async function getHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const customer = await prisma.marahCustomer.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         addresses: true,
         orders: {
@@ -76,15 +77,16 @@ async function getHandler(
 
 async function putHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const validatedData = updateCustomerSchema.parse(body);
 
     // Get the customer first to verify ownership
     const existingCustomer = await prisma.marahCustomer.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -105,7 +107,7 @@ async function putHandler(
 
     // Update the customer
     const updatedCustomer = await prisma.marahCustomer.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...validatedData,
         email: validatedData.email || null,
@@ -139,12 +141,13 @@ async function putHandler(
 
 async function deleteHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Get the customer first to verify ownership
     const existingCustomer = await prisma.marahCustomer.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -177,12 +180,12 @@ async function deleteHandler(
 
     // Delete customer addresses first
     await prisma.marahCustomerAddress.deleteMany({
-      where: { customerId: params.id },
+      where: { customerId: id },
     });
 
     // Delete the customer
     await prisma.marahCustomer.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ message: 'Customer deleted successfully' });

@@ -18,11 +18,12 @@ const updateDeliveryChargeSchema = z.object({
 
 async function getHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const deliveryCharge = await prisma.marahDeliveryCharge.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -61,15 +62,16 @@ async function getHandler(
 
 async function putHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const validatedData = updateDeliveryChargeSchema.parse(body);
 
     // Get the delivery charge first to verify ownership
     const existingDeliveryCharge = await prisma.marahDeliveryCharge.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -94,7 +96,7 @@ async function putHandler(
         where: {
           zone: validatedData.zone,
           companyId: existingDeliveryCharge.companyId,
-          id: { not: params.id },
+          id: { not: id },
         },
       });
 
@@ -105,7 +107,7 @@ async function putHandler(
 
     // Update the delivery charge
     const updatedDeliveryCharge = await prisma.marahDeliveryCharge.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         ...validatedData,
         updatedAt: new Date(),
@@ -133,12 +135,13 @@ async function putHandler(
 
 async function deleteHandler(
   request: AuthenticatedRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Get the delivery charge first to verify ownership
     const existingDeliveryCharge = await prisma.marahDeliveryCharge.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: {
         company: {
           select: {
@@ -174,7 +177,7 @@ async function deleteHandler(
 
     // Delete the delivery charge
     await prisma.marahDeliveryCharge.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ message: 'Delivery charge deleted successfully' });
