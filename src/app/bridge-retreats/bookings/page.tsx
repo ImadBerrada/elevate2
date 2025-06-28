@@ -32,7 +32,12 @@ import {
   Star,
   TrendingUp,
   FileText,
-  Send
+  Send,
+  X,
+  RotateCcw,
+  Hotel,
+  Bed,
+  Globe
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,12 +49,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { format, parseISO } from "date-fns";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -59,13 +66,17 @@ const fadeInUp = {
 
 interface Booking {
   id: string;
+  confirmationNumber: string;
   checkInDate: string;
   checkOutDate: string;
   guestCount: number;
+  adults: number;
+  children: number;
   totalAmount: number;
   status: 'PENDING' | 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED' | 'WAITLISTED';
   paymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' | 'REFUNDED' | 'FAILED';
   specialRequests?: string;
+  source: string;
   createdAt: string;
   guest: {
     id: string;
@@ -73,15 +84,44 @@ interface Booking {
     lastName: string;
     email: string;
     phone?: string;
+    fullName: string;
+  };
+  room: {
+    id: string;
+    roomNumber: string;
+    roomType: string;
+    facility?: {
+      name: string;
+    };
   };
   retreat: {
     id: string;
     title: string;
     type: string;
     location: string;
-    instructor: string;
     price: number;
   };
+  pmsData?: {
+    bookingId: string;
+    confirmationNo: string;
+    source: string;
+    roomId?: string;
+    lastUpdated: string;
+  };
+}
+
+interface BookingStats {
+  totalBookings: number;
+  totalRevenue: number;
+  confirmedBookings: number;
+  checkedInBookings: number;
+  checkedOutBookings: number;
+  cancelledBookings: number;
+  pendingBookings: number;
+  upcomingBookings: number;
+  currentGuests: number;
+  averageBookingValue: number;
+  occupancyRate: number;
 }
 
 export default function BookingsPage() {
@@ -91,19 +131,34 @@ export default function BookingsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("ALL");
-  const [retreatFilter, setRetreatFilter] = useState("ALL");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [selectedBookings, setSelectedBookings] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
-  const [stats, setStats] = useState<any>({});
+  const [stats, setStats] = useState<BookingStats>({
+    totalBookings: 0,
+    totalRevenue: 0,
+    confirmedBookings: 0,
+    checkedInBookings: 0,
+    checkedOutBookings: 0,
+    cancelledBookings: 0,
+    pendingBookings: 0,
+    upcomingBookings: 0,
+    currentGuests: 0,
+    averageBookingValue: 0,
+    occupancyRate: 0
+  });
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
-  const [retreats, setRetreats] = useState<any[]>([]);
+  const [roomTypes, setRoomTypes] = useState<any[]>([]);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<string>('');
 
   useEffect(() => {
     fetchBookings();
-    fetchRetreats();
   }, []);
 
   useEffect(() => {
@@ -112,42 +167,106 @@ export default function BookingsPage() {
     }, 300);
 
     return () => clearTimeout(delayedSearch);
-  }, [searchTerm, statusFilter, paymentStatusFilter, retreatFilter, dateRange, pagination.page]);
+  }, [searchTerm, statusFilter, paymentStatusFilter, dateRange, pagination?.page]);
 
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      const params = {
-        page: pagination.page,
-        limit: pagination.limit,
-        ...(searchTerm && { guestName: searchTerm }),
-        ...(statusFilter !== 'ALL' && { status: statusFilter }),
-        ...(paymentStatusFilter !== 'ALL' && { paymentStatus: paymentStatusFilter }),
-        ...(retreatFilter !== 'ALL' && { retreatId: retreatFilter }),
-        ...(dateRange.start && { startDate: dateRange.start }),
-        ...(dateRange.end && { endDate: dateRange.end }),
-      };
-
-      const data = await apiClient.getRetreatBookings(params);
-      setBookings(data.bookings || []);
-      setPagination(data.pagination);
-      setStats(data.stats || {});
+      setError(null);
+      
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (statusFilter !== 'ALL') params.append('status', statusFilter);
+      if (dateRange.start) params.append('startDate', dateRange.start);
+      if (dateRange.end) params.append('endDate', dateRange.end);
+      
+      console.log('Fetching bookings from eZee PMS...');
+      const response = await fetch(`/api/bridge-retreats/bookings?${params.toString()}`);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch bookings');
+      }
+      
+      if (data.bookings) {
+        setBookings(data.bookings);
+        setStats(data.stats || stats);
+        setRoomTypes(data.roomTypes || []);
+        setDataSource(data.source || 'eZee PMS');
+        setLastSync(data.lastSync);
+        setPagination(prev => ({ ...prev, total: data.total || data.bookings.length }));
+        
+        console.log(`Loaded ${data.bookings.length} bookings from ${data.source}`);
+        
+        if (data.bookings.length === 0) {
+          setSuccess('No bookings found. This might be because eZee PMS is not returning data or there are no bookings for the selected criteria.');
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch bookings:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch bookings');
+      setError(err instanceof Error ? err.message : 'Failed to fetch bookings from eZee PMS');
+      setBookings([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchRetreats = async () => {
+  const handleRefresh = async () => {
     try {
-      const data = await apiClient.getRetreats({ limit: 1000 });
-      setRetreats(data.retreats || []);
+      setRefreshing(true);
+      setError(null);
+      setSuccess(null);
+      await fetchBookings();
+      setSuccess('Bookings refreshed successfully from eZee PMS');
     } catch (err) {
-      console.error('Failed to fetch retreats:', err);
+      console.error('Failed to refresh data:', err);
+      setError('Failed to refresh data from eZee PMS. Please try again.');
+    } finally {
+      setRefreshing(false);
     }
   };
+
+  const handleSyncPMS = async () => {
+    try {
+      setSyncing(true);
+      setError(null);
+      setSuccess(null);
+      
+      console.log('Syncing with eZee PMS...');
+      const response = await fetch('/api/bridge-retreats/bookings?sync=true');
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to sync with eZee PMS');
+      }
+      
+      if (data.bookings) {
+        setBookings(data.bookings);
+        setStats(data.stats || stats);
+        setRoomTypes(data.roomTypes || []);
+        setLastSync(data.lastSync);
+        setSuccess(`Successfully synced ${data.bookings.length} bookings from eZee PMS`);
+      }
+    } catch (err) {
+      console.error('Failed to sync with eZee PMS:', err);
+      setError('Failed to sync with eZee PMS. Please check your connection and try again.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const clearMessages = () => {
+    setError(null);
+    setSuccess(null);
+  };
+
+  // Auto-clear messages after 5 seconds
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(clearMessages, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -173,17 +292,17 @@ export default function BookingsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    try {
+      return format(parseISO(dateString), 'MMM dd, yyyy');
+    } catch {
+      return dateString;
+    }
   };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'AED',
+      currency: 'USD'
     }).format(amount);
   };
 
@@ -199,7 +318,7 @@ export default function BookingsPage() {
     if (selectedBookings.length === bookings.length) {
       setSelectedBookings([]);
     } else {
-      setSelectedBookings(bookings.map(b => b.id));
+      setSelectedBookings(bookings.map(booking => booking.id));
     }
   };
 
@@ -208,173 +327,256 @@ export default function BookingsPage() {
 
     try {
       setBulkActionLoading(true);
-      await apiClient.bulkUpdateRetreatBookings(action, selectedBookings, data);
+      setError(null);
+      setSuccess(null);
+
+      for (const bookingId of selectedBookings) {
+        switch (action) {
+          case 'confirm':
+            await fetch(`/api/bridge-retreats/bookings`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId, updates: { status: 'CONFIRMED' } })
+            });
+            break;
+          case 'cancel':
+            await fetch(`/api/bridge-retreats/bookings?bookingId=${bookingId}&reason=${data?.reason || 'Bulk cancellation'}`, {
+              method: 'DELETE'
+            });
+            break;
+          case 'checkin':
+            await fetch(`/api/bridge-retreats/bookings`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId, updates: { status: 'CHECKED_IN' } })
+            });
+            break;
+          case 'checkout':
+            await fetch(`/api/bridge-retreats/bookings`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bookingId, updates: { status: 'CHECKED_OUT' } })
+            });
+            break;
+        }
+      }
+
+      setSuccess(`Bulk action "${action}" completed for ${selectedBookings.length} bookings`);
       setSelectedBookings([]);
-      fetchBookings();
+      await fetchBookings();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to perform bulk action');
+      console.error('Bulk action failed:', err);
+      setError('Failed to perform bulk action. Please try again.');
     } finally {
       setBulkActionLoading(false);
     }
   };
 
-  if (loading && bookings.length === 0) {
-    return (
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex items-center space-x-2">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            <span className="text-lg font-medium">Loading bookings...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const filteredBookings = bookings.filter(booking => {
+    if (paymentStatusFilter !== 'ALL' && booking.paymentStatus !== paymentStatusFilter) {
+      return false;
+    }
+    return true;
+  });
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen bg-gray-50">
       <Sidebar />
-      
       <div className={cn(
-        "flex-1 flex flex-col transition-all duration-300",
-        isDesktop && isOpen ? "ml-0" : "ml-0",
-        "min-w-0"
+        "flex-1 flex flex-col overflow-hidden transition-all duration-300",
+        isOpen && !isMobile ? "ml-64" : "ml-0"
       )}>
         <Header />
 
-        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-          {/* Page Header */}
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
           <motion.div 
-            className="mb-6 sm:mb-8"
-            {...fadeInUp}
+            initial="initial"
+            animate="animate"
+            variants={fadeInUp}
+            className="max-w-7xl mx-auto space-y-6"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h2 className="text-2xl sm:text-3xl font-prestigious text-gradient mb-2">
-                  Booking Management
-                </h2>
-                <p className="text-sm sm:text-base text-refined text-muted-foreground">
-                  Manage retreat bookings, payments, and guest information.
+                <h1 className="text-3xl font-bold text-gray-900">Bookings Management</h1>
+                <p className="text-gray-600 mt-1">
+                  Manage retreat bookings from eZee PMS
+                  {dataSource && (
+                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <Globe className="w-3 h-3 mr-1" />
+                      {dataSource}
+                    </span>
+                  )}
+                  {lastSync && (
+                    <span className="ml-2 text-sm text-gray-500">
+                      Last sync: {format(parseISO(lastSync), 'MMM dd, HH:mm')}
+                    </span>
+                  )}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <Link href="/bridge-retreats/bookings/create">
-                  <Button className="btn-premium">
-                    <Plus className="w-4 h-4 mr-2" />
+              <div className="flex items-center gap-2">
+                <Button 
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  variant="outline" 
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  {refreshing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Refresh
+                </Button>
+                <Button
+                  onClick={handleSyncPMS}
+                  disabled={syncing}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  {syncing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-4 h-4" />
+                  )}
+                  Sync PMS
+                </Button>
+                <Button size="sm" className="flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
                     New Booking
                   </Button>
-                </Link>
               </div>
             </div>
-          </motion.div>
+
+            {/* Alerts */}
+              {error && (
+              <Alert className="border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800">
+                  {error}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearMessages}
+                    className="ml-2 h-auto p-0 text-red-600 hover:text-red-800"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </AlertDescription>
+                </Alert>
+              )}
+
+              {success && (
+                <Alert className="border-green-200 bg-green-50">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  {success}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearMessages}
+                    className="ml-2 h-auto p-0 text-green-600 hover:text-green-800"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </AlertDescription>
+                </Alert>
+          )}
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-            <motion.div {...fadeInUp} transition={{ delay: 0.1 }}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-2 sm:pb-3">
-                  <CardTitle className="text-xs sm:text-sm font-medium flex items-center">
-                    <Calendar className="w-4 h-4 mr-2 text-blue-600" />
-                    <span className="hidden sm:inline">Total Bookings</span>
-                    <span className="sm:hidden">Total</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="text-xl sm:text-2xl font-bold text-gradient">
-                    {stats.totalBookings || 0}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Bookings</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.totalBookings}</p>
+                    </div>
+                    <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Calendar className="h-6 w-6 text-blue-600" />
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
-                    All time bookings
-                  </p>
+                  <div className="mt-4 flex items-center text-sm">
+                    <span className="text-green-600">+{stats.upcomingBookings} upcoming</span>
+                  </div>
                 </CardContent>
               </Card>
-            </motion.div>
 
-            <motion.div {...fadeInUp} transition={{ delay: 0.2 }}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-2 sm:pb-3">
-                  <CardTitle className="text-xs sm:text-sm font-medium flex items-center">
-                    <DollarSign className="w-4 h-4 mr-2 text-green-600" />
-                    <span className="hidden sm:inline">Total Revenue</span>
-                    <span className="sm:hidden">Revenue</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="text-xl sm:text-2xl font-bold text-green-600">
-                    {formatCurrency(stats.totalRevenue || 0)}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+                      <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalRevenue)}</p>
+                    </div>
+                    <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <DollarSign className="h-6 w-6 text-green-600" />
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
-                    From all bookings
-                  </p>
+                  <div className="mt-4 flex items-center text-sm">
+                    <span className="text-gray-600">
+                      Avg: {formatCurrency(stats.averageBookingValue)}
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
-            </motion.div>
 
-            <motion.div {...fadeInUp} transition={{ delay: 0.3 }}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-2 sm:pb-3">
-                  <CardTitle className="text-xs sm:text-sm font-medium flex items-center">
-                    <CheckCircle className="w-4 h-4 mr-2 text-blue-600" />
-                    <span className="hidden sm:inline">Confirmed</span>
-                    <span className="sm:hidden">Confirmed</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="text-xl sm:text-2xl font-bold text-blue-600">
-                    {stats.statusCounts?.CONFIRMED || 0}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Current Guests</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.currentGuests}</p>
+                    </div>
+                    <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <Users className="h-6 w-6 text-purple-600" />
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
-                    Confirmed bookings
-                  </p>
+                  <div className="mt-4 flex items-center text-sm">
+                    <span className="text-blue-600">{stats.checkedInBookings} checked in</span>
+                  </div>
                 </CardContent>
               </Card>
-            </motion.div>
 
-            <motion.div {...fadeInUp} transition={{ delay: 0.4 }}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-2 sm:pb-3">
-                  <CardTitle className="text-xs sm:text-sm font-medium flex items-center">
-                    <AlertCircle className="w-4 h-4 mr-2 text-yellow-600" />
-                    <span className="hidden sm:inline">Pending</span>
-                    <span className="sm:hidden">Pending</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="text-xl sm:text-2xl font-bold text-yellow-600">
-                    {stats.statusCounts?.PENDING || 0}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Confirmed</p>
+                      <p className="text-2xl font-bold text-gray-900">{stats.confirmedBookings}</p>
+                    </div>
+                    <div className="h-12 w-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                      <CheckCircle className="h-6 w-6 text-yellow-600" />
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
-                    Awaiting confirmation
-                  </p>
+                  <div className="mt-4 flex items-center text-sm">
+                    <span className="text-orange-600">{stats.pendingBookings} pending</span>
+                  </div>
                 </CardContent>
               </Card>
-            </motion.div>
-          </div>
+            </div>
 
           {/* Filters and Search */}
-          <motion.div 
-            className="flex flex-col gap-4 mb-6"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            {/* Search and Filters Row */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex flex-col gap-4">
+                  {/* Search and Status Filters */}
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Search by guest name or email..."
+                        placeholder="Search by guest name, email, or confirmation number..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 border-refined h-11"
+                        className="pl-10"
                 />
               </div>
               
-              {/* Filters */}
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-40 border-refined h-11">
+                        <SelectTrigger className="w-full sm:w-40">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -389,7 +591,7 @@ export default function BookingsPage() {
                 </Select>
 
                 <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-40 border-refined h-11">
+                        <SelectTrigger className="w-full sm:w-40">
                     <SelectValue placeholder="Payment" />
                   </SelectTrigger>
                   <SelectContent>
@@ -399,20 +601,6 @@ export default function BookingsPage() {
                     <SelectItem value="PAID">Paid</SelectItem>
                     <SelectItem value="FAILED">Failed</SelectItem>
                     <SelectItem value="REFUNDED">Refunded</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={retreatFilter} onValueChange={setRetreatFilter}>
-                  <SelectTrigger className="w-full sm:w-48 border-refined h-11">
-                    <SelectValue placeholder="Retreat" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All Retreats</SelectItem>
-                    {retreats.map(retreat => (
-                      <SelectItem key={retreat.id} value={retreat.id}>
-                        {retreat.title}
-                      </SelectItem>
-                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -428,7 +616,7 @@ export default function BookingsPage() {
                     type="date"
                     value={dateRange.start}
                     onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                    className="border-refined h-9"
+                          className="w-full sm:w-auto"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -438,7 +626,7 @@ export default function BookingsPage() {
                     type="date"
                     value={dateRange.end}
                     onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                    className="border-refined h-9"
+                          className="w-full sm:w-auto"
                   />
                 </div>
               </div>
@@ -446,7 +634,7 @@ export default function BookingsPage() {
               {/* Bulk Actions */}
               {selectedBookings.length > 0 && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
+                        <span className="text-sm text-gray-600">
                     {selectedBookings.length} selected
                   </span>
                   <Button
@@ -454,7 +642,6 @@ export default function BookingsPage() {
                     variant="outline"
                     onClick={() => handleBulkAction('confirm')}
                     disabled={bulkActionLoading}
-                    className="h-9"
                   >
                     <CheckCircle className="w-4 h-4 mr-1" />
                     Confirm
@@ -464,7 +651,6 @@ export default function BookingsPage() {
                     variant="outline"
                     onClick={() => handleBulkAction('cancel')}
                     disabled={bulkActionLoading}
-                    className="h-9"
                   >
                     <XCircle className="w-4 h-4 mr-1" />
                     Cancel
@@ -472,246 +658,189 @@ export default function BookingsPage() {
                 </div>
               )}
             </div>
-          </motion.div>
+                </div>
+              </CardContent>
+            </Card>
 
           {/* Bookings Table */}
-          <motion.div 
-            {...fadeInUp}
-            transition={{ delay: 0.5 }}
-          >
-            <Card className="card-premium border-refined">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-xl font-elegant">Bookings</CardTitle>
-                <CardDescription className="text-refined">
-                  {pagination.total} bookings found
+                <CardTitle className="flex items-center justify-between">
+                  <span>Bookings</span>
+                  <Badge variant="secondary">{filteredBookings.length} found</Badge>
+                </CardTitle>
+                <CardDescription>
+                  Manage bookings from eZee PMS
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto -mx-4 sm:mx-0">
-                  <div className="min-w-full inline-block align-middle">
-                    <div className="overflow-hidden border border-border/30 rounded-lg">
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                    <span className="ml-2 text-gray-600">Loading bookings from eZee PMS...</span>
+                  </div>
+                ) : filteredBookings.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
+                      <Calendar className="w-8 h-8 text-blue-600" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      No bookings found
+                    </h3>
+                    <p className="text-gray-600 text-center mb-6 max-w-md">
+                      {searchTerm || statusFilter !== "ALL" || paymentStatusFilter !== "ALL" || dateRange.start || dateRange.end
+                        ? 'Try adjusting your search criteria or filters to find what you\'re looking for.'
+                        : 'No bookings are currently available from eZee PMS. Check your PMS connection or create a new booking.'
+                      }
+                    </p>
+                    {!(searchTerm || statusFilter !== "ALL" || paymentStatusFilter !== "ALL" || dateRange.start || dateRange.end) && (
+                      <Button>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create First Booking
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-gray-50/50">
+                        <TableRow>
                             <TableHead className="w-12">
                               <Checkbox
-                                checked={selectedBookings.length === bookings.length && bookings.length > 0}
+                              checked={selectedBookings.length === filteredBookings.length && filteredBookings.length > 0}
                                 onCheckedChange={handleSelectAll}
                               />
                             </TableHead>
-                            <TableHead className="font-semibold text-gray-900 min-w-[200px]">Guest</TableHead>
-                            <TableHead className="font-semibold text-gray-900 min-w-[200px]">Retreat</TableHead>
-                            <TableHead className="font-semibold text-gray-900 min-w-[120px]">Dates</TableHead>
-                            <TableHead className="font-semibold text-gray-900 min-w-[80px]">Guests</TableHead>
-                            <TableHead className="font-semibold text-gray-900 min-w-[100px]">Amount</TableHead>
-                            <TableHead className="font-semibold text-gray-900 min-w-[100px]">Status</TableHead>
-                            <TableHead className="font-semibold text-gray-900 min-w-[100px]">Payment</TableHead>
-                            <TableHead className="font-semibold text-gray-900 min-w-[120px] text-right">Actions</TableHead>
+                          <TableHead>Guest</TableHead>
+                          <TableHead>Room</TableHead>
+                          <TableHead>Dates</TableHead>
+                          <TableHead>Guests</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Payment</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {bookings.map((booking) => (
-                            <TableRow 
-                              key={booking.id} 
-                              className="hover:bg-blue-50/50 transition-colors border-b border-border/20"
-                            >
+                        {filteredBookings.map((booking) => (
+                          <TableRow key={booking.id}>
                               <TableCell>
                                 <Checkbox
                                   checked={selectedBookings.includes(booking.id)}
                                   onCheckedChange={() => handleSelectBooking(booking.id)}
                                 />
                               </TableCell>
-                              <TableCell className="py-4">
+                            <TableCell>
                                 <div className="flex items-center space-x-3">
-                                  <Avatar className="w-10 h-10">
-                                    <AvatarFallback className="bg-gradient-to-br from-primary/10 to-primary/5 text-primary font-semibold">
+                                <Avatar className="w-8 h-8">
+                                  <AvatarFallback className="bg-blue-100 text-blue-600 text-sm">
                                       {booking.guest.firstName[0]}{booking.guest.lastName[0]}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <div className="min-w-0">
-                                    <div className="font-semibold text-gray-900 truncate">
+                                <div>
+                                  <div className="font-medium text-gray-900">
                                       {booking.guest.firstName} {booking.guest.lastName}
                                     </div>
-                                    <div className="text-sm text-muted-foreground truncate">
+                                  <div className="text-sm text-gray-500">
                                       {booking.guest.email}
                                     </div>
-                                    {booking.guest.phone && (
-                                      <div className="text-xs text-muted-foreground truncate">
-                                        {booking.guest.phone}
+                                  {booking.confirmationNumber && (
+                                    <div className="text-xs text-gray-400">
+                                      #{booking.confirmationNumber}
                                       </div>
                                     )}
                                   </div>
                                 </div>
                               </TableCell>
-                              <TableCell className="py-4">
-                                <div className="min-w-0">
-                                  <div className="font-semibold text-gray-900 truncate">
-                                    {booking.retreat.title}
+                            <TableCell>
+                              <div>
+                                <div className="font-medium text-gray-900">
+                                  {booking.room.roomType}
                                   </div>
-                                  <div className="text-sm text-muted-foreground truncate">
-                                    {booking.retreat.type} • {booking.retreat.location}
+                                <div className="text-sm text-gray-500">
+                                  Room {booking.room.roomNumber}
                                   </div>
-                                  <div className="text-xs text-muted-foreground truncate">
-                                    Instructor: {booking.retreat.instructor}
+                                <div className="text-xs text-gray-400">
+                                  {booking.source}
                                   </div>
                                 </div>
                               </TableCell>
-                              <TableCell className="py-4">
+                            <TableCell>
                                 <div className="text-sm">
                                   <div className="font-medium">
                                     {formatDate(booking.checkInDate)}
                                   </div>
-                                  <div className="text-muted-foreground">
+                                <div className="text-gray-500">
                                     to {formatDate(booking.checkOutDate)}
                                   </div>
                                 </div>
                               </TableCell>
-                              <TableCell className="py-4">
+                            <TableCell>
                                 <div className="flex items-center">
-                                  <Users className="w-4 h-4 mr-1 text-muted-foreground" />
+                                <Users className="w-4 h-4 mr-1 text-gray-400" />
                                   <span className="font-medium">{booking.guestCount}</span>
+                                <span className="text-xs text-gray-500 ml-1">
+                                  ({booking.adults}A{booking.children > 0 ? `, ${booking.children}C` : ''})
+                                </span>
                                 </div>
                               </TableCell>
-                              <TableCell className="py-4">
-                                <span className="font-semibold text-green-600">
-                                  {formatCurrency(booking.totalAmount)}
+                            <TableCell>
+                              <span className="font-semibold text-gray-900">
+                                {formatCurrency(booking.totalAmount)}
                                 </span>
                               </TableCell>
-                              <TableCell className="py-4">
+                            <TableCell>
                                 <Badge className={cn("text-xs", getStatusColor(booking.status))}>
                                   {booking.status.replace('_', ' ')}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="py-4">
+                            <TableCell>
                                 <Badge className={cn("text-xs", getPaymentStatusColor(booking.paymentStatus))}>
                                   {booking.paymentStatus}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="py-4">
+                            <TableCell className="text-right">
                                 <div className="flex items-center justify-end space-x-1">
-                                  <Link href={`/bridge-retreats/bookings/${booking.id}`}>
                                     <Button 
                                       size="sm" 
                                       variant="ghost" 
-                                      className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-700"
+                                  className="h-8 w-8 p-0"
                                       title="View Details"
                                     >
                                       <Eye className="w-4 h-4" />
                                     </Button>
-                                  </Link>
-                                  <Link href={`/bridge-retreats/bookings/${booking.id}/edit`}>
                                     <Button 
                                       size="sm" 
                                       variant="ghost" 
-                                      className="h-8 w-8 p-0 hover:bg-green-100 hover:text-green-700"
+                                  className="h-8 w-8 p-0"
                                       title="Edit Booking"
                                     >
                                       <Edit className="w-4 h-4" />
                                     </Button>
-                                  </Link>
-                                  <Link href={`/bridge-retreats/bookings/${booking.id}/payment`}>
                                     <Button 
                                       size="sm" 
                                       variant="ghost" 
-                                      className="h-8 w-8 p-0 hover:bg-purple-100 hover:text-purple-700"
+                                  className="h-8 w-8 p-0"
                                       title="Payment"
                                     >
                                       <CreditCard className="w-4 h-4" />
                                     </Button>
-                                  </Link>
                                 </div>
                               </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
-                    </div>
-                  </div>
-                </div>
-
-                {bookings.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-12 sm:py-16 px-4">
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.5 }}
-                      className="text-center"
-                    >
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
-                        <Calendar className="w-8 h-8 sm:w-10 sm:h-10 text-blue-600" />
-                      </div>
-                      <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">
-                        No bookings found
-                      </h3>
-                      <p className="text-sm sm:text-base text-muted-foreground text-center mb-6 max-w-md mx-auto">
-                        {searchTerm || statusFilter !== "ALL" || paymentStatusFilter !== "ALL" || retreatFilter !== "ALL" || dateRange.start || dateRange.end
-                          ? 'Try adjusting your search criteria or filters to find what you\'re looking for.'
-                          : 'Start by creating your first booking for a retreat.'
-                        }
-                      </p>
-                      {!(searchTerm || statusFilter !== "ALL" || paymentStatusFilter !== "ALL" || retreatFilter !== "ALL" || dateRange.start || dateRange.end) && (
-                        <Link href="/bridge-retreats/bookings/create">
-                          <Button className="btn-premium">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Create First Booking
-                          </Button>
-                        </Link>
-                      )}
-                    </motion.div>
-                  </div>
-                )}
-
-                {/* Pagination */}
-                {pagination.pages > 1 && (
-                  <div className="flex items-center justify-between mt-6 pt-6 border-t border-border/30">
-                    <div className="text-sm text-muted-foreground">
-                      Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} bookings
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                        disabled={pagination.page === 1}
-                      >
-                        Previous
-                      </Button>
-                      <span className="text-sm font-medium">
-                        Page {pagination.page} of {pagination.pages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                        disabled={pagination.page === pagination.pages}
-                      >
-                        Next
-                      </Button>
-                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
           </motion.div>
-
-          {error && (
-            <div className="fixed bottom-4 right-4 bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg">
-              <div className="flex items-center">
-                <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-                <p className="text-red-600 text-sm">{error}</p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setError(null)}
-                  className="ml-2 h-6 w-6 p-0"
-                >
-                  <XCircle className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          )}
         </main>
       </div>
     </div>
   );
 } 
+ 
+ 
+ 

@@ -237,4 +237,80 @@ export const DELETE = withRole(['SUPER_ADMIN'])(async (request: AuthenticatedReq
       { status: 500 }
     );
   }
+});
+
+// PUT /api/manager-assignments - Update an existing manager assignment (Super Admin only)
+export const PUT = withRole(['SUPER_ADMIN'])(async (request: AuthenticatedRequest) => {
+  try {
+    const body = await request.json();
+    const { userId, companyId, platforms = [], permissions = {} } = body;
+
+    // Validate required fields
+    if (!userId || !companyId) {
+      return NextResponse.json(
+        { error: 'userId and companyId are required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if the assignment exists
+    const existingAssignment = await prisma.managerAssignment.findUnique({
+      where: {
+        userId_companyId: {
+          userId,
+          companyId,
+        },
+      },
+    });
+
+    if (!existingAssignment) {
+      return NextResponse.json(
+        { error: 'Manager assignment not found' },
+        { status: 404 }
+      );
+    }
+
+    // Update the assignment
+    const assignment = await prisma.managerAssignment.update({
+      where: {
+        userId_companyId: {
+          userId,
+          companyId,
+        },
+      },
+      data: {
+        platforms,
+        permissions,
+        updatedAt: new Date(),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+          },
+        },
+        company: {
+          select: {
+            id: true,
+            name: true,
+            industry: true,
+            location: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(assignment, { status: 200 });
+  } catch (error) {
+    console.error('Error updating manager assignment:', error);
+    return NextResponse.json(
+      { error: 'Failed to update manager assignment' },
+      { status: 500 }
+    );
+  }
 }); 

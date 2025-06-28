@@ -88,7 +88,7 @@ class ApiClient {
   }
 
   // Auth endpoints
-  async login(data: LoginInput) {
+  async login(data: LoginInput & { keepLoggedIn?: boolean }) {
     const response = await this.request<{
       user: any;
       token: string;
@@ -535,6 +535,18 @@ class ApiClient {
     });
   }
 
+  async updateManagerAssignment(data: {
+    userId: string;
+    companyId: string;
+    platforms?: string[];
+    permissions?: any;
+  }) {
+    return this.request<any>('/manager-assignments', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   async deleteManagerAssignment(params: {
     assignmentId?: string;
     userId?: string;
@@ -747,6 +759,35 @@ class ApiClient {
       method: 'PATCH',
       body: JSON.stringify({ action: 'autoPromote', retreatId }),
     });
+  }
+
+  // Real Estate Properties endpoints
+  async getRealEstateProperties(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    ownerId?: string;
+    propertyTypeId?: string;
+    status?: string;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.ownerId) searchParams.set('ownerId', params.ownerId);
+    if (params?.propertyTypeId) searchParams.set('propertyTypeId', params.propertyTypeId);
+    if (params?.status) searchParams.set('status', params.status);
+
+    const query = searchParams.toString();
+    return this.request<{
+      success: boolean;
+      properties: any[];
+      pagination: any;
+    }>(`/real-estate/properties${query ? `?${query}` : ''}`);
+  }
+
+  async getRealEstatePropertyById(id: string) {
+    return this.request<any>(`/real-estate/properties/${id}`);
   }
 }
 

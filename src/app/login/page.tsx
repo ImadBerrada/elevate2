@@ -11,6 +11,7 @@ import { Loader2 } from 'lucide-react';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isClient, setIsClient] = useState(false);
@@ -34,7 +35,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await login(email, password);
+      await login(email, password, keepLoggedIn);
       // Redirect is handled by the auth context
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Login failed');
@@ -100,6 +101,19 @@ export default function LoginPage() {
               className="mt-1 h-10 sm:h-11"
               placeholder="Enter your password"
             />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <input
+              id="keepLoggedIn"
+              type="checkbox"
+              checked={keepLoggedIn}
+              onChange={(e) => setKeepLoggedIn(e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <Label htmlFor="keepLoggedIn" className="text-sm text-gray-700 cursor-pointer">
+              Keep me logged in for 30 days
+            </Label>
           </div>
 
           {error && (

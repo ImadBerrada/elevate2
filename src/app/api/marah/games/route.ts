@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
+import { withRole, AuthenticatedRequest } from '@/lib/middleware';
+import { verifyCompanyAccess } from '@/lib/company-access';
 
 const gameSchema = z.object({
   nameEn: z.string().min(1, 'English name is required'),
@@ -37,16 +38,10 @@ async function getHandler(request: AuthenticatedRequest) {
       return NextResponse.json({ error: 'Company ID is required' }, { status: 400 });
     }
 
-    // Verify company belongs to user
-    const company = await prisma.company.findFirst({
-      where: {
-        id: companyId,
-        userId: request.user!.userId,
-      },
-    });
-
-    if (!company) {
-      return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+    // Verify user has access to this company
+    const hasAccess = await verifyCompanyAccess(request.user!.userId, request.user!.role, companyId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Company access denied' }, { status: 403 });
     }
 
     const where: any = { companyId };
@@ -123,16 +118,10 @@ async function postHandler(request: AuthenticatedRequest) {
     const body = await request.json();
     const validatedData = gameSchema.parse(body);
 
-    // Verify company belongs to user
-    const company = await prisma.company.findFirst({
-      where: {
-        id: validatedData.companyId,
-        userId: request.user!.userId,
-      },
-    });
-
-    if (!company) {
-      return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+    // Verify user has access to this company
+    const hasAccess = await verifyCompanyAccess(request.user!.userId, request.user!.role, validatedData.companyId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Company access denied' }, { status: 403 });
     }
 
     // Set default weekly and monthly prices if not provided
@@ -156,5 +145,5 @@ async function postHandler(request: AuthenticatedRequest) {
   }
 }
 
-export const GET = withAuth(getHandler);
-export const POST = withAuth(postHandler); 
+export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(getHandler);
+export const POST = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(postHandler); 

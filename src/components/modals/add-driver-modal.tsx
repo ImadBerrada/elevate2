@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, User, Phone, Mail, Car, CreditCard, MapPin, DollarSign, Loader2, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ interface AddDriverModalProps {
   isOpen: boolean;
   onClose: () => void;
   onDriverCreated: () => void;
-  companyId: string;
+  companyId?: string; // Make optional since we'll now allow selection
 }
 
 export function AddDriverModal({ isOpen, onClose, onDriverCreated, companyId }: AddDriverModalProps) {
@@ -24,6 +24,8 @@ export function AddDriverModal({ isOpen, onClose, onDriverCreated, companyId }: 
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [vehicleRegistrationFile, setVehicleRegistrationFile] = useState<File | null>(null);
   const [profilePictureFile, setProfilePictureFile] = useState<File | null>(null);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
   
   // Form states
   const [formData, setFormData] = useState({
@@ -32,6 +34,7 @@ export function AddDriverModal({ isOpen, onClose, onDriverCreated, companyId }: 
     email: "",
     department: "",
     startDate: "",
+    companyId: companyId || "", // Initialize with passed companyId or empty
     
     // Additional employee fields
     role: "",
@@ -63,6 +66,35 @@ export function AddDriverModal({ isOpen, onClose, onDriverCreated, companyId }: 
       [field]: value,
     }));
   };
+
+  // Fetch companies on component mount
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        setLoadingCompanies(true);
+        const response = await fetch('/api/companies/list', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setCompanies(data.companies || []);
+        } else {
+          console.error('Failed to fetch companies');
+        }
+      } catch (error) {
+        console.error('Error fetching companies:', error);
+      } finally {
+        setLoadingCompanies(false);
+      }
+    };
+
+    if (isOpen) {
+      fetchCompanies();
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,6 +132,11 @@ export function AddDriverModal({ isOpen, onClose, onDriverCreated, companyId }: 
       setCreating(false);
       return;
     }
+    if (!formData.companyId.trim()) {
+      setError('Company selection is required');
+      setCreating(false);
+      return;
+    }
 
     try {
       // Handle file uploads if there are document files
@@ -130,7 +167,6 @@ export function AddDriverModal({ isOpen, onClose, onDriverCreated, companyId }: 
         },
         body: JSON.stringify({
           ...formData,
-          companyId,
           email: formData.email || undefined,
           skills: formData.skills ? formData.skills.split(',').map(skill => skill.trim()).filter(Boolean) : [],
           licenseDocument: licenseDocumentUrl || undefined,
@@ -178,6 +214,7 @@ export function AddDriverModal({ isOpen, onClose, onDriverCreated, companyId }: 
       email: "",
       department: "",
       startDate: "",
+      companyId: companyId || "", 
       
       // Additional employee fields
       role: "",
@@ -242,6 +279,43 @@ export function AddDriverModal({ isOpen, onClose, onDriverCreated, companyId }: 
                 </div>
               </CardContent>
             </Card>
+
+            {/* Company Selection */}
+            {!companyId && (
+              <Card className="card-premium border-refined">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <User className="w-4 h-4" />
+                    <span>Company Assignment</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="companyId" className="text-sm font-medium">Select Company *</Label>
+                    <Select 
+                      value={formData.companyId} 
+                      onValueChange={(value) => handleInputChange('companyId', value)} 
+                      required
+                      disabled={loadingCompanies}
+                    >
+                      <SelectTrigger className="border-refined">
+                        <SelectValue placeholder={loadingCompanies ? "Loading companies..." : "Select company to assign driver to"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((company) => (
+                          <SelectItem key={company.id} value={company.id}>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{company.name}</span>
+                              <span className="text-sm text-muted-foreground">({company.industry})</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Personal Information */}
             <Card className="card-premium border-refined">

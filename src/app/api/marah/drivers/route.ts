@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
+import { withRole, AuthenticatedRequest } from '@/lib/middleware';
+import { verifyCompanyAccess, getAccessibleCompanyIds } from '@/lib/company-access';
 
 const driverSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -46,23 +47,29 @@ async function getHandler(request: AuthenticatedRequest) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const skip = (page - 1) * limit;
 
-    if (!companyId) {
-      return NextResponse.json({ error: 'Company ID is required' }, { status: 400 });
+    // Build where clause based on user role and permissions
+    const where: any = {};
+
+    if (companyId) {
+      // Verify user has access to this specific company
+      const hasAccess = await verifyCompanyAccess(request.user!.userId, request.user!.role, companyId);
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Company access denied' }, { status: 403 });
+      }
+      where.companyId = companyId;
+    } else {
+      // Get all accessible companies for this user
+      const accessibleCompanyIds = await getAccessibleCompanyIds(request.user!.userId, request.user!.role);
+      
+      if (accessibleCompanyIds.length === 0) {
+        return NextResponse.json({ 
+          drivers: [], 
+          pagination: { page, limit, total: 0, pages: 0 } 
+        });
+      }
+      
+      where.companyId = { in: accessibleCompanyIds };
     }
-
-    // Verify company belongs to user
-    const company = await prisma.company.findFirst({
-      where: {
-        id: companyId,
-        userId: request.user!.userId,
-      },
-    });
-
-    if (!company) {
-      return NextResponse.json({ error: 'Company not found' }, { status: 404 });
-    }
-
-    const where: any = { companyId };
 
     if (search) {
       where.OR = [
@@ -141,16 +148,10 @@ async function postHandler(request: AuthenticatedRequest) {
     const body = await request.json();
     const validatedData = driverSchema.parse(body);
 
-    // Verify company belongs to user
-    const company = await prisma.company.findFirst({
-      where: {
-        id: validatedData.companyId,
-        userId: request.user!.userId,
-      },
-    });
-
-    if (!company) {
-      return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+    // Verify user has access to this company
+    const hasAccess = await verifyCompanyAccess(request.user!.userId, request.user!.role, validatedData.companyId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Company access denied' }, { status: 403 });
     }
 
     // Check if phone number already exists for driver
@@ -168,7 +169,10 @@ async function postHandler(request: AuthenticatedRequest) {
     }
 
     // Check if email already exists for employee (if email is provided)
-    if (validatedData.email) {
+    // Skip this check if we're creating a driver from an existing employee (indicated by employee fields being present)
+    const isCreatingFromEmployee = validatedData.department && validatedData.startDate && validatedData.role;
+    
+    if (validatedData.email && !isCreatingFromEmployee) {
       const existingEmployee = await prisma.employee.findFirst({
         where: {
           email: validatedData.email,
@@ -183,7 +187,7 @@ async function postHandler(request: AuthenticatedRequest) {
       }
     }
 
-    // Use transaction to create both driver and employee records
+    // Use transaction to create driver and optionally employee records
     const result = await prisma.$transaction(async (tx) => {
       // Extract driver-specific fields
       const {
@@ -207,35 +211,51 @@ async function postHandler(request: AuthenticatedRequest) {
         },
       });
 
-      // Create the employee record
-      const employee = await tx.employee.create({
-        data: {
-          firstName: name.split(' ')[0] || name,
-          lastName: name.split(' ').slice(1).join(' ') || '',
-          email: validatedData.email || '',
-          phone: validatedData.phone,
-          position: role,
-          department: department,
-          salary: validatedData.salary?.toString() || null,
-          actualSalary: actualSalary || null,
-          startDate: new Date(startDate),
-          status: employeeStatus || 'ACTIVE',
-          location: location || null,
-          manager: manager || null,
-          skills: skills,
-          avatar: validatedData.profilePicture || null,
-          companyId: validatedData.companyId,
-          userId: request.user!.userId,
-        },
-      });
+      let employee = null;
+      
+      // Only create employee if we're not creating from an existing employee
+      if (!isCreatingFromEmployee) {
+        employee = await tx.employee.create({
+          data: {
+            firstName: name.split(' ')[0] || name,
+            lastName: name.split(' ').slice(1).join(' ') || '',
+            email: validatedData.email || '',
+            phone: validatedData.phone,
+            position: role,
+            department: department,
+            salary: validatedData.salary?.toString() || null,
+            actualSalary: actualSalary || null,
+            startDate: new Date(startDate),
+            status: employeeStatus || 'ACTIVE',
+            location: location || null,
+            manager: manager || null,
+            skills: skills,
+            avatar: validatedData.profilePicture || null,
+            companyId: validatedData.companyId,
+            userId: request.user!.userId,
+          },
+        });
+      } else {
+        // If creating from existing employee, find the existing employee
+        employee = await tx.employee.findFirst({
+          where: {
+            email: validatedData.email,
+            companyId: validatedData.companyId,
+          },
+        });
+      }
 
       return { driver, employee };
     });
 
+    const message = isCreatingFromEmployee 
+      ? 'Driver created successfully from existing employee'
+      : 'Driver created successfully and added to employee management';
+
     return NextResponse.json({
       driver: result.driver,
       employee: result.employee,
-      message: 'Driver created successfully and added to employee management'
+      message
     }, { status: 201 });
 
   } catch (error) {
@@ -257,5 +277,5 @@ async function postHandler(request: AuthenticatedRequest) {
   }
 }
 
-export const GET = withAuth(getHandler);
-export const POST = withAuth(postHandler); 
+export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(getHandler);
+export const POST = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(postHandler); 

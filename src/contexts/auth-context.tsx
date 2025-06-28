@@ -17,7 +17,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, keepLoggedIn?: boolean) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<boolean>;
 }
@@ -44,16 +44,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      // For now, we'll assume the token is valid if it exists
-      // In a real app, you'd validate the token with the server
-      // You could add a /api/auth/me endpoint to validate the token
-      
-      setIsLoading(false);
-      return true;
+      // Validate token with the server
+      try {
+        const response = await fetch('/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Token validation failed');
+        }
+
+        const userData = await response.json();
+        setUser(userData.user);
+        setIsLoading(false);
+        return true;
+      } catch (tokenError) {
+        console.error('Token validation failed:', tokenError);
+        // Token is invalid, clear it
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_data');
+        localStorage.removeItem('keep_logged_in');
+        setUser(null);
+        setIsLoading(false);
+        return false;
+      }
     } catch (error) {
       console.error('Auth check failed:', error);
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_data');
+        localStorage.removeItem('keep_logged_in');
       }
       setUser(null);
       setIsLoading(false);
@@ -61,10 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, keepLoggedIn: boolean = false) => {
     try {
       setIsLoading(true);
-      const response = await apiClient.login({ email, password });
+      const response = await apiClient.login({ email, password, keepLoggedIn });
       
       // Set user data from login response
       setUser(response.user);
@@ -72,6 +94,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Store user data in localStorage for persistence
       if (typeof window !== 'undefined') {
         localStorage.setItem('user_data', JSON.stringify(response.user));
+        // Store the keepLoggedIn preference
+        if (keepLoggedIn) {
+          localStorage.setItem('keep_logged_in', 'true');
+        } else {
+          localStorage.removeItem('keep_logged_in');
+        }
       }
       
       setIsLoading(false);
@@ -95,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Clear user data from localStorage
     if (typeof window !== 'undefined') {
       localStorage.removeItem('user_data');
+      localStorage.removeItem('keep_logged_in');
     }
     
     router.push('/login');
@@ -102,24 +131,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Check if we have a token and try to restore user session
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('auth_token');
-      const userData = localStorage.getItem('user_data');
-      
-      if (token && userData) {
-        try {
-          const parsedUser = JSON.parse(userData);
-          setUser(parsedUser);
-        } catch (error) {
-          console.error('Failed to parse user data:', error);
-          // Clear invalid data
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('user_data');
+    const initializeAuth = async () => {
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('auth_token');
+        const userData = localStorage.getItem('user_data');
+        
+        if (token && userData) {
+          try {
+            // Validate token with server
+            const isValid = await checkAuth();
+            
+            if (!isValid) {
+              // Token is invalid, clear everything
+              localStorage.removeItem('auth_token');
+              localStorage.removeItem('user_data');
+              localStorage.removeItem('keep_logged_in');
+              setUser(null);
+            }
+          } catch (error) {
+            console.error('Failed to validate token:', error);
+            // Clear invalid data
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            localStorage.removeItem('keep_logged_in');
+            setUser(null);
+          }
         }
       }
-    }
-    setIsLoading(false);
-  }, []);
+      setIsLoading(false);
+    };
+
+    initializeAuth();
+
+    // Set up periodic token validation (every 5 minutes)
+    const interval = setInterval(async () => {
+      if (typeof window !== 'undefined' && localStorage.getItem('auth_token')) {
+        const isValid = await checkAuth();
+        if (!isValid) {
+          // Token expired, redirect to login
+          router.push('/login');
+        }
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [router]);
 
   const value = {
     user,

@@ -25,7 +25,9 @@ import {
   Car,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Building,
+  X
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -88,7 +90,8 @@ export default function DriversPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [marahCompanyId, setMarahCompanyId] = useState<string | null>(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [companies, setCompanies] = useState<any[]>([]);
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -105,9 +108,7 @@ export default function DriversPage() {
     { value: "BUSY", label: "Busy" },
   ];
 
-  useEffect(() => {
-    fetchMarahCompany();
-  }, []);
+
 
   // Auto-dismiss success notifications
   useEffect(() => {
@@ -118,7 +119,11 @@ export default function DriversPage() {
   }, [success]);
 
   useEffect(() => {
-    if (marahCompanyId) {
+    fetchCompanies();
+  }, []);
+
+  useEffect(() => {
+    if (selectedCompanyId) {
       fetchDrivers();
       
       // Set up real-time updates
@@ -128,17 +133,17 @@ export default function DriversPage() {
       
       return () => clearInterval(interval);
     }
-  }, [marahCompanyId]);
+  }, [selectedCompanyId]);
 
   useEffect(() => {
-    if (marahCompanyId) {
+    if (selectedCompanyId) {
       fetchDrivers();
     }
   }, [searchTerm, statusFilter]);
 
-  const fetchMarahCompany = async () => {
+  const fetchCompanies = async () => {
     try {
-      const response = await fetch('/api/companies', {
+      const response = await fetch('/api/companies/list', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
         },
@@ -146,28 +151,37 @@ export default function DriversPage() {
       
       if (response.ok) {
         const data = await response.json();
-        const marahCompany = data.companies.find((company: any) => 
-          company.name === 'MARAH Inflatable Games Rental'
-        );
+        setCompanies(data.companies || []);
         
-        if (marahCompany) {
-          setMarahCompanyId(marahCompany.id);
+        // Auto-select first company if only one exists
+        if (data.companies && data.companies.length === 1) {
+          setSelectedCompanyId(data.companies[0].id);
+        } else if (data.companies && data.companies.length === 0) {
+          // No companies available - stop loading
+          setError('No companies available. Please contact your administrator.');
+          setLoading(false);
         } else {
-          setError('MARAH company not found. Please create it first from the Companies page.');
+          // Multiple companies - user needs to select one
+          setLoading(false);
         }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        setError(`Failed to fetch companies: ${errorData.error || 'Unknown error'}`);
+        setLoading(false);
       }
     } catch (error) {
       console.error('Error fetching companies:', error);
       setError('Failed to fetch company information');
+      setLoading(false);
     }
   };
 
   const fetchDrivers = async () => {
-    if (!marahCompanyId) return;
+    if (!selectedCompanyId) return;
     
     try {
       const params = new URLSearchParams({
-        companyId: marahCompanyId,
+        companyId: selectedCompanyId,
       });
 
       if (searchTerm) params.append('search', searchTerm);
@@ -182,12 +196,16 @@ export default function DriversPage() {
       if (response.ok) {
         const data = await response.json();
         setDrivers(data.drivers || []);
+        setError(null); // Clear any previous errors
       } else {
-        setError('Failed to fetch drivers');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        setError(`Failed to fetch drivers: ${errorData.error || 'Unknown error'}`);
+        setDrivers([]); // Clear drivers on error
       }
     } catch (error) {
       console.error('Error fetching drivers:', error);
-      setError('Failed to fetch drivers');
+      setError('Failed to fetch drivers: Network error');
+      setDrivers([]); // Clear drivers on error
     } finally {
       setLoading(false);
     }
@@ -439,368 +457,453 @@ export default function DriversPage() {
             </div>
           </motion.div>
 
-          {/* Driver Stats */}
-          <motion.div 
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
-            variants={staggerContainer}
-            initial="initial"
-            animate="animate"
-          >
-            <motion.div variants={fadeInUp}>
+          {/* Company Selection */}
+          {companies.length > 1 && (
+            <motion.div 
+              className="mb-6"
+              {...fadeInUp}
+            >
               <Card className="card-premium border-refined">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between text-sm">
-                    <span>Total Drivers</span>
-                    <Truck className="h-4 w-4 text-blue-600" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gradient">
-                    {stats.totalDrivers}
-                  </div>
-                  <p className="text-xs text-blue-600">
-                    {stats.activeDrivers} active
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between text-sm">
-                    <span>Active Drivers</span>
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">
-                    {stats.activeDrivers}
-                  </div>
-                  <p className="text-xs text-green-600">
-                    Available for delivery
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between text-sm">
-                    <span>Busy Drivers</span>
-                    <Clock className="h-4 w-4 text-orange-600" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-orange-600">
-                    {stats.busyDrivers}
-                  </div>
-                  <p className="text-xs text-orange-600">
-                    Currently on delivery
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp}>
-              <Card className="card-premium border-refined">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between text-sm">
-                    <span>Avg Completion</span>
-                    <Star className="h-4 w-4 text-purple-600" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gradient">
-                    {stats.avgCompletionRate.toFixed(1)}%
-                  </div>
-                  <p className="text-xs text-purple-600">
-                    Success rate
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </motion.div>
-
-          {/* Filters */}
-          <motion.div 
-            className="mb-6"
-            {...fadeInUp}
-          >
-            <Card className="card-premium border-refined">
-              <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center space-x-2">
-                    <Filter className="w-5 h-5 text-primary" />
-                    <span>Driver Filtering</span>
-                  </CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowFilters(!showFilters)}
-                  >
-                    {showFilters ? 'Hide Filters' : 'Show Filters'}
-                  </Button>
-                </div>
-              </CardHeader>
-              
-              {showFilters && (
-                <CardContent className="space-y-4">
-                  {/* Search and Filters Row */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="search">Search Drivers</Label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                        <Input
-                          id="search"
-                          placeholder="Name, phone, license..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
+                <CardContent className="pt-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <Building className="w-5 h-5 text-muted-foreground" />
+                      <Label htmlFor="company-select" className="text-sm font-medium">
+                        Select Company:
+                      </Label>
                     </div>
-
-                    <div>
-                      <Label htmlFor="status">Status Filter</Label>
-                      <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All statuses" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {statusOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Filter Actions */}
-                  <div className="flex items-center justify-between pt-4 border-t">
-                    <div className="text-sm text-muted-foreground">
-                      {drivers.length} drivers found
-                    </div>
-                    <Button variant="outline" size="sm" onClick={clearFilters}>
-                      Clear All Filters
-                    </Button>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-          </motion.div>
-
-          {/* Drivers Table */}
-          <motion.div 
-            {...fadeInUp}
-          >
-            <Card className="card-premium border-refined">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Truck className="w-5 h-5 text-primary" />
-                    <span>Drivers Directory</span>
-                  </div>
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                    {drivers.length} Total Drivers
-                  </Badge>
-                </CardTitle>
-                <CardDescription>
-                  Complete driver profiles with photos, contact information, performance metrics, and employment details
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {drivers.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[250px]">Driver Profile</TableHead>
-                          <TableHead className="w-[200px]">Contact Information</TableHead>
-                          <TableHead className="w-[120px]">Status</TableHead>
-                          <TableHead className="w-[180px]">Vehicle Details</TableHead>
-                          <TableHead className="w-[150px] text-center">Performance</TableHead>
-                          <TableHead className="w-[150px] text-center">Financial</TableHead>
-                          <TableHead className="w-[120px] text-center">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {drivers.map((driver) => {
-                          const StatusIcon = getStatusIcon(driver.status);
-                          return (
-                            <TableRow key={driver.id}>
-                              <TableCell>
-                                <div className="flex items-center space-x-3">
-                                  <DriverAvatar 
-                                    driver={driver}
-                                    size="xl"
-                                    ring={true}
-                                    className="shadow-xl ring-2 ring-white/10"
-                                  />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="font-medium text-sm truncate">{driver.name}</div>
-                                    {driver.licenseNumber && (
-                                      <div className="text-xs text-muted-foreground flex items-center mt-1">
-                                        <CreditCard className="w-3 h-3 mr-1 flex-shrink-0" />
-                                        <span className="truncate">{driver.licenseNumber}</span>
-                                      </div>
-                                    )}
-                                    {driver.experience && (
-                                      <div className="text-xs text-blue-600 flex items-center mt-1">
-                                        <Star className="w-3 h-3 mr-1 flex-shrink-0" />
-                                        <span>{driver.experience} years exp.</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="space-y-1">
-                                  <div className="text-sm flex items-center">
-                                    <Phone className="w-3 h-3 mr-1 text-muted-foreground flex-shrink-0" />
-                                    <span className="truncate">{driver.phone}</span>
-                                  </div>
-                                  {driver.email && (
-                                    <div className="text-sm flex items-center text-muted-foreground">
-                                      <Mail className="w-3 h-3 mr-1 flex-shrink-0" />
-                                      <span className="truncate">{driver.email}</span>
-                                    </div>
-                                  )}
-                                  {driver.address && (
-                                    <div className="text-xs flex items-center text-muted-foreground">
-                                      <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
-                                      <span className="truncate">{driver.address}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge 
-                                  className={cn("text-xs cursor-pointer", getStatusColor(driver.status))}
-                                  onClick={() => handleToggleStatus(driver.id, driver.status)}
-                                >
-                                  <StatusIcon className="w-3 h-3 mr-1" />
-                                  {driver.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center space-x-1">
-                                  <Car className="w-4 h-4 text-muted-foreground" />
-                                  <div>
-                                    <div className="font-medium text-sm">
-                                      {driver.vehicleInfo || 'Not specified'}
-                                    </div>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="text-center">
-                                  <div className="font-semibold">{driver.totalOrders}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {driver.completionRate.toFixed(1)}% success
-                                  </div>
-                                  {driver.activeOrders > 0 && (
-                                    <div className="text-xs text-orange-600">
-                                      {driver.activeOrders} active
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="text-center space-y-1">
-                                  <div className="font-semibold text-green-600">
-                                    {formatCurrency(toNumber(driver.totalRevenue))}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    Total earned
-                                  </div>
-                                  {driver.salary && (
-                                    <div className="text-xs text-blue-600">
-                                      {formatCurrency(toNumber(driver.salary))}/month
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex space-x-1">
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    title="View Details"
-                                    onClick={() => handleViewDriver(driver.id)}
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    title="Edit Driver"
-                                    onClick={() => handleEditDriver(driver.id)}
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="text-red-600 hover:text-red-700"
-                                    onClick={() => handleDeleteDriver(driver.id)}
-                                    title="Delete Driver"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <div className="text-center py-16">
-                    <div className="relative mb-6">
-                      <div className="w-24 h-24 bg-gradient-to-r from-green-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Truck className="w-12 h-12 text-gradient" />
-                      </div>
-                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                        <UserPlus className="w-4 h-4 text-yellow-600" />
-                      </div>
-                    </div>
-                    <h3 className="text-xl font-bold text-gradient mb-2">
-                      {searchTerm || statusFilter !== 'all' ? 'No Matching Drivers' : 'Build Your Driver Team'}
-                    </h3>
-                    <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                      {searchTerm || statusFilter !== 'all'
-                        ? "No drivers match your current search criteria. Try adjusting your filters or search terms."
-                        : "Start building your delivery team by adding your first driver. Upload their profile picture, contact details, and vehicle information."
-                      }
-                    </p>
-                    {(searchTerm || statusFilter !== 'all') ? (
-                      <div className="space-x-3">
-                        <Button variant="outline" onClick={clearFilters}>
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Clear Filters
-                        </Button>
-                        <Button onClick={() => setShowAddDriver(true)} className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700">
-                          <UserPlus className="w-4 h-4 mr-2" />
-                          Add New Driver
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button onClick={() => setShowAddDriver(true)} size="lg" className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700">
-                        <UserPlus className="w-5 h-5 mr-2" />
-                        Add Your First Driver
+                    <Select 
+                      value={selectedCompanyId || ""} 
+                      onValueChange={setSelectedCompanyId}
+                    >
+                      <SelectTrigger id="company-select" className="w-[300px]">
+                        <SelectValue placeholder="Select a company to view drivers" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((company) => (
+                          <SelectItem key={company.id} value={company.id}>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{company.name}</span>
+                              <span className="text-sm text-muted-foreground">({company.industry})</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedCompanyId && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setSelectedCompanyId(null)}
+                        className="text-muted-foreground"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Clear
                       </Button>
                     )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+
+
+          {/* Driver Stats */}
+          {selectedCompanyId ? (
+            <>
+              <motion.div 
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+              >
+                <motion.div variants={fadeInUp}>
+                  <Card className="card-premium border-refined">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center justify-between text-sm">
+                        <span>Total Drivers</span>
+                        <Truck className="h-4 w-4 text-blue-600" />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-gradient">
+                        {stats.totalDrivers}
+                      </div>
+                      <p className="text-xs text-blue-600">
+                        {stats.activeDrivers} active
+                      </p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                <motion.div variants={fadeInUp}>
+                  <Card className="card-premium border-refined">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center justify-between text-sm">
+                        <span>Active Drivers</span>
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-green-600">
+                        {stats.activeDrivers}
+                      </div>
+                      <p className="text-xs text-green-600">
+                        Available for delivery
+                      </p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                <motion.div variants={fadeInUp}>
+                  <Card className="card-premium border-refined">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center justify-between text-sm">
+                        <span>Busy Drivers</span>
+                        <Clock className="h-4 w-4 text-orange-600" />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-orange-600">
+                        {stats.busyDrivers}
+                      </div>
+                      <p className="text-xs text-orange-600">
+                        Currently on delivery
+                      </p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                <motion.div variants={fadeInUp}>
+                  <Card className="card-premium border-refined">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center justify-between text-sm">
+                        <span>Avg Completion</span>
+                        <Star className="h-4 w-4 text-purple-600" />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-gradient">
+                        {stats.avgCompletionRate.toFixed(1)}%
+                      </div>
+                      <p className="text-xs text-purple-600">
+                        Success rate
+                      </p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </motion.div>
+
+              {/* Filters */}
+              <motion.div 
+                className="mb-6"
+                {...fadeInUp}
+              >
+                <Card className="card-premium border-refined">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center space-x-2">
+                        <Filter className="w-5 h-5 text-primary" />
+                        <span>Driver Filtering</span>
+                      </CardTitle>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowFilters(!showFilters)}
+                      >
+                        {showFilters ? 'Hide Filters' : 'Show Filters'}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  
+                  {showFilters && (
+                    <CardContent className="space-y-4">
+                      {/* Search and Filters Row */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="search">Search Drivers</Label>
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                            <Input
+                              id="search"
+                              placeholder="Name, phone, license..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="pl-10"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="status">Status Filter</Label>
+                          <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="All statuses" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {statusOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Filter Actions */}
+                      <div className="flex items-center justify-between pt-4 border-t">
+                        <div className="text-sm text-muted-foreground">
+                          {drivers.length} drivers found
+                        </div>
+                        <Button variant="outline" size="sm" onClick={clearFilters}>
+                          Clear All Filters
+                        </Button>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              </motion.div>
+
+              {/* Drivers Table */}
+              <motion.div 
+                {...fadeInUp}
+              >
+                <Card className="card-premium border-refined">
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Truck className="w-5 h-5 text-primary" />
+                        <span>Drivers Directory</span>
+                      </div>
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                        {drivers.length} Total Drivers
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Complete driver profiles with photos, contact information, performance metrics, and employment details
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {drivers.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[250px]">Driver Profile</TableHead>
+                              <TableHead className="w-[200px]">Contact Information</TableHead>
+                              <TableHead className="w-[120px]">Status</TableHead>
+                              <TableHead className="w-[180px]">Vehicle Details</TableHead>
+                              <TableHead className="w-[150px] text-center">Performance</TableHead>
+                              <TableHead className="w-[150px] text-center">Financial</TableHead>
+                              <TableHead className="w-[120px] text-center">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {drivers.map((driver) => {
+                              const StatusIcon = getStatusIcon(driver.status);
+                              return (
+                                <TableRow key={driver.id}>
+                                  <TableCell>
+                                    <div className="flex items-center space-x-3">
+                                      <DriverAvatar 
+                                        driver={driver}
+                                        size="xl"
+                                        ring={true}
+                                        className="shadow-xl ring-2 ring-white/10"
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="font-medium text-sm truncate">{driver.name}</div>
+                                        {driver.licenseNumber && (
+                                          <div className="text-xs text-muted-foreground flex items-center mt-1">
+                                            <CreditCard className="w-3 h-3 mr-1 flex-shrink-0" />
+                                            <span className="truncate">{driver.licenseNumber}</span>
+                                          </div>
+                                        )}
+                                        {driver.experience && (
+                                          <div className="text-xs text-blue-600 flex items-center mt-1">
+                                            <Star className="w-3 h-3 mr-1 flex-shrink-0" />
+                                            <span>{driver.experience} years exp.</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="space-y-1">
+                                      <div className="text-sm flex items-center">
+                                        <Phone className="w-3 h-3 mr-1 text-muted-foreground flex-shrink-0" />
+                                        <span className="truncate">{driver.phone}</span>
+                                      </div>
+                                      {driver.email && (
+                                        <div className="text-sm flex items-center text-muted-foreground">
+                                          <Mail className="w-3 h-3 mr-1 flex-shrink-0" />
+                                          <span className="truncate">{driver.email}</span>
+                                        </div>
+                                      )}
+                                      {driver.address && (
+                                        <div className="text-xs flex items-center text-muted-foreground">
+                                          <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
+                                          <span className="truncate">{driver.address}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge 
+                                      className={cn("text-xs cursor-pointer", getStatusColor(driver.status))}
+                                      onClick={() => handleToggleStatus(driver.id, driver.status)}
+                                    >
+                                      <StatusIcon className="w-3 h-3 mr-1" />
+                                      {driver.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center space-x-1">
+                                      <Car className="w-4 h-4 text-muted-foreground" />
+                                      <div>
+                                        <div className="font-medium text-sm">
+                                          {driver.vehicleInfo || 'Not specified'}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="text-center">
+                                      <div className="font-semibold">{driver.totalOrders}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {driver.completionRate.toFixed(1)}% success
+                                      </div>
+                                      {driver.activeOrders > 0 && (
+                                        <div className="text-xs text-orange-600">
+                                          {driver.activeOrders} active
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="text-center space-y-1">
+                                      <div className="font-semibold text-green-600">
+                                        {formatCurrency(toNumber(driver.totalRevenue))}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        Total earned
+                                      </div>
+                                      {driver.salary && (
+                                        <div className="text-xs text-blue-600">
+                                          {formatCurrency(toNumber(driver.salary))}/month
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex space-x-1">
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        title="View Details"
+                                        onClick={() => handleViewDriver(driver.id)}
+                                      >
+                                        <Eye className="w-3 h-3" />
+                                      </Button>
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        title="Edit Driver"
+                                        onClick={() => handleEditDriver(driver.id)}
+                                      >
+                                        <Edit className="w-3 h-3" />
+                                      </Button>
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="text-red-600 hover:text-red-700"
+                                        onClick={() => handleDeleteDriver(driver.id)}
+                                        title="Delete Driver"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-16">
+                        <div className="relative mb-6">
+                          <div className="w-24 h-24 bg-gradient-to-r from-green-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Truck className="w-12 h-12 text-gradient" />
+                          </div>
+                          <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                            <UserPlus className="w-4 h-4 text-yellow-600" />
+                          </div>
+                        </div>
+                        <h3 className="text-xl font-bold text-gradient mb-2">
+                          {searchTerm || statusFilter !== 'all' ? 'No Matching Drivers' : 'Build Your Driver Team'}
+                        </h3>
+                        <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                          {searchTerm || statusFilter !== 'all'
+                            ? "No drivers match your current search criteria. Try adjusting your filters or search terms."
+                            : "Start building your delivery team by adding your first driver. Upload their profile picture, contact details, and vehicle information."
+                          }
+                        </p>
+                        {(searchTerm || statusFilter !== 'all') ? (
+                          <div className="space-x-3">
+                            <Button variant="outline" onClick={clearFilters}>
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              Clear Filters
+                            </Button>
+                            <Button onClick={() => setShowAddDriver(true)} className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700">
+                              <UserPlus className="w-4 h-4 mr-2" />
+                              Add New Driver
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button onClick={() => setShowAddDriver(true)} size="lg" className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700">
+                            <UserPlus className="w-5 h-5 mr-2" />
+                            Add Your First Driver
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </>
+          ) : (
+            <motion.div 
+              className="text-center py-16"
+              {...fadeInUp}
+            >
+              <div className="relative mb-6">
+                <div className="w-24 h-24 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Building className="w-12 h-12 text-gradient" />
+                </div>
+                <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                  <UserPlus className="w-4 h-4 text-yellow-600" />
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-gradient mb-2">
+                Select a Company
+              </h3>
+              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                Please select a company from the dropdown above to view and manage its drivers.
+              </p>
+              {companies.length > 0 && (
+                <Button 
+                  onClick={() => setSelectedCompanyId(companies[0].id)}
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                >
+                  <Building className="w-4 h-4 mr-2" />
+                  Select {companies[0].name}
+                </Button>
+              )}
+            </motion.div>
+          )}
         </main>
       </div>
 
@@ -809,7 +912,7 @@ export default function DriversPage() {
         isOpen={showAddDriver}
         onClose={() => setShowAddDriver(false)}
         onDriverCreated={handleDriverCreated}
-        companyId={marahCompanyId || ""}
+        companyId={selectedCompanyId || undefined}
       />
 
       {/* Driver Detail Modal */}

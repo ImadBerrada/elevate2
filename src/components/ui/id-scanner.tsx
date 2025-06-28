@@ -780,3 +780,6 @@ export function IdScanner({ onIdExtracted, onDocumentUploaded, className }: IdSc
     </Card>
   );
 } 
+ 
+ 
+ 

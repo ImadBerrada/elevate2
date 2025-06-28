@@ -27,12 +27,16 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  Pause
+  Pause,
+  Trash2,
+  X
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -43,6 +47,7 @@ import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -54,8 +59,9 @@ interface Retreat {
   id: string;
   title: string;
   description: string;
-  type: 'wellness' | 'corporate' | 'spiritual' | 'adventure' | 'educational';
-  status: 'active' | 'draft' | 'archived' | 'full';
+  type: 'WELLNESS' | 'CORPORATE' | 'SPIRITUAL' | 'ADVENTURE' | 'EDUCATIONAL' | 'CUSTOM';
+  customTypeName?: string;
+  status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'FULL';
   duration: number; // days
   capacity: number;
   currentBookings: number;
@@ -67,9 +73,18 @@ interface Retreat {
   rating: number;
   totalReviews: number;
   amenities: string[];
-  image: string;
+  images: string[];
   createdAt: string;
   updatedAt: string;
+  stats?: {
+    totalBookings: number;
+    confirmedBookings: number;
+    completedBookings: number;
+    totalGuests: number;
+    totalRevenue: number;
+    averageRating: number;
+    occupancyRate: number;
+  };
 }
 
 export default function RetreatList() {
@@ -82,6 +97,12 @@ export default function RetreatList() {
   const [sortBy, setSortBy] = useState("title");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [retreatToDelete, setRetreatToDelete] = useState<Retreat | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchRetreats();
@@ -89,7 +110,9 @@ export default function RetreatList() {
 
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
-      fetchRetreats();
+      if (searchTerm || typeFilter !== 'all' || statusFilter !== 'all') {
+        fetchRetreats();
+      }
     }, 300);
 
     return () => clearTimeout(delayedSearch);
@@ -98,6 +121,8 @@ export default function RetreatList() {
   const fetchRetreats = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
       const params = {
         search: searchTerm || undefined,
         type: typeFilter !== 'all' ? typeFilter : undefined,
@@ -110,41 +135,75 @@ export default function RetreatList() {
       setRetreats(data.retreats || []);
     } catch (err) {
       console.error('Failed to fetch retreats:', err);
-      // For now, show empty state instead of error to avoid breaking the UI
+      setError('Failed to load retreats. Please try again.');
       setRetreats([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchRetreats();
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'draft': return 'bg-yellow-100 text-yellow-800';
-      case 'archived': return 'bg-gray-100 text-gray-800';
-      case 'full': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'ACTIVE': return 'bg-green-100 text-green-800 border-green-200';
+      case 'DRAFT': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'ARCHIVED': return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'FULL': return 'bg-blue-100 text-blue-800 border-blue-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'active': return CheckCircle;
-      case 'draft': return AlertCircle;
-      case 'archived': return Archive;
-      case 'full': return Pause;
+      case 'ACTIVE': return CheckCircle;
+      case 'DRAFT': return AlertCircle;
+      case 'ARCHIVED': return Archive;
+      case 'FULL': return Pause;
       default: return XCircle;
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'wellness': return 'bg-green-50 text-green-700 border-green-200';
-      case 'corporate': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'spiritual': return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'adventure': return 'bg-orange-50 text-orange-700 border-orange-200';
-      case 'educational': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      case 'WELLNESS': return 'bg-green-50 text-green-700 border-green-200';
+      case 'CORPORATE': return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'SPIRITUAL': return 'bg-purple-50 text-purple-700 border-purple-200';
+      case 'ADVENTURE': return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'EDUCATIONAL': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      case 'CUSTOM': return 'bg-pink-50 text-pink-700 border-pink-200';
       default: return 'bg-gray-50 text-gray-700 border-gray-200';
+    }
+  };
+
+  const getTypeLabel = (retreat: Retreat) => {
+    // If it's a custom type, use the custom type name
+    if (retreat.type === 'CUSTOM' && retreat.customTypeName) {
+      return retreat.customTypeName;
+    }
+    
+    // Otherwise use predefined labels
+    switch (retreat.type) {
+      case 'WELLNESS': return 'Wellness';
+      case 'CORPORATE': return 'Corporate';
+      case 'SPIRITUAL': return 'Spiritual';
+      case 'ADVENTURE': return 'Adventure';
+      case 'EDUCATIONAL': return 'Educational';
+      default: return retreat.type;
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'ACTIVE': return 'Active';
+      case 'DRAFT': return 'Draft';
+      case 'ARCHIVED': return 'Archived';
+      case 'FULL': return 'Full';
+      default: return status;
     }
   };
 
@@ -174,15 +233,89 @@ export default function RetreatList() {
     }
   });
 
-  const handleDuplicate = (retreat: Retreat) => {
-    console.log('Duplicating retreat:', retreat.title);
-    // In production, this would create a copy of the retreat
+  const handleDuplicate = async (retreat: Retreat) => {
+    try {
+      setSuccess(null);
+      setError(null);
+      
+      // In production, this would duplicate the retreat
+      console.log('Duplicating retreat:', retreat.title);
+      setSuccess(`Retreat "${retreat.title}" duplicated successfully.`);
+      
+      // Refresh the list
+      await fetchRetreats();
+    } catch (err) {
+      console.error('Failed to duplicate retreat:', err);
+      setError('Failed to duplicate retreat. Please try again.');
+    }
   };
 
-  const handleArchive = (retreat: Retreat) => {
-    console.log('Archiving retreat:', retreat.title);
-    // In production, this would archive the retreat
+  const handleArchive = async (retreat: Retreat) => {
+    try {
+      setSuccess(null);
+      setError(null);
+      
+      // In production, this would archive the retreat
+      console.log('Archiving retreat:', retreat.title);
+      setSuccess(`Retreat "${retreat.title}" archived successfully.`);
+      
+      // Refresh the list
+      await fetchRetreats();
+    } catch (err) {
+      console.error('Failed to archive retreat:', err);
+      setError('Failed to archive retreat. Please try again.');
+    }
   };
+
+  const handleDeleteClick = (retreat: Retreat) => {
+    setRetreatToDelete(retreat);
+    setDeleteDialogOpen(true);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!retreatToDelete) return;
+
+    try {
+      setDeleting(true);
+      setError(null);
+      
+      await apiClient.deleteRetreat(retreatToDelete.id);
+      
+      setSuccess(`Retreat "${retreatToDelete.title}" deleted successfully.`);
+      setDeleteDialogOpen(false);
+      setRetreatToDelete(null);
+      
+      // Refresh the list
+      await fetchRetreats();
+    } catch (err) {
+      console.error('Failed to delete retreat:', err);
+      setError('Failed to delete retreat. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setRetreatToDelete(null);
+    setDeleting(false);
+    setError(null);
+  };
+
+  const clearMessages = () => {
+    setError(null);
+    setSuccess(null);
+  };
+
+  // Auto-clear messages after 5 seconds
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(clearMessages, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
 
   if (loading) {
     return (
@@ -191,7 +324,7 @@ export default function RetreatList() {
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center space-x-2">
             <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-            <span className="text-lg font-medium">Loading Retreats...</span>
+            <span className="text-lg font-elegant">Loading Retreats...</span>
           </div>
         </div>
       </div>
@@ -226,7 +359,18 @@ export default function RetreatList() {
               </div>
               
               <div className="flex items-center space-x-3">
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="border-refined"
+                >
+                  <RefreshCw className={cn("w-4 h-4 mr-2", refreshing && "animate-spin")} />
+                  Refresh
+                </Button>
+                
+                <Button variant="outline" size="sm" className="border-refined">
                   <Download className="w-4 h-4 mr-2" />
                   Export
                 </Button>
@@ -240,6 +384,44 @@ export default function RetreatList() {
               </div>
             </div>
           </motion.div>
+
+          {/* Error/Success Messages */}
+          {(error || success) && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 fixed top-20 right-4 z-50 max-w-md"
+            >
+              {error && (
+                <Alert variant="destructive" className="border-red-200 bg-red-50">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-red-800">{error}</AlertDescription>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearMessages}
+                    className="absolute top-2 right-2 h-6 w-6 p-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Alert>
+              )}
+              {success && (
+                <Alert className="border-green-200 bg-green-50">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-800">{success}</AlertDescription>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearMessages}
+                    className="absolute top-2 right-2 h-6 w-6 p-0"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Alert>
+              )}
+            </motion.div>
+          )}
 
           {/* Stats Cards */}
           <motion.div 
@@ -258,7 +440,7 @@ export default function RetreatList() {
               <CardContent>
                 <div className="text-2xl font-bold text-gradient">{retreats.length}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {retreats.filter(r => r.status === 'active').length} active
+                  {retreats.filter(r => r.status === 'ACTIVE').length} active
                 </p>
               </CardContent>
             </Card>
@@ -345,11 +527,12 @@ export default function RetreatList() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="wellness">Wellness</SelectItem>
-                        <SelectItem value="corporate">Corporate</SelectItem>
-                        <SelectItem value="spiritual">Spiritual</SelectItem>
-                        <SelectItem value="adventure">Adventure</SelectItem>
-                        <SelectItem value="educational">Educational</SelectItem>
+                        <SelectItem value="WELLNESS">Wellness</SelectItem>
+                        <SelectItem value="CORPORATE">Corporate</SelectItem>
+                        <SelectItem value="SPIRITUAL">Spiritual</SelectItem>
+                        <SelectItem value="ADVENTURE">Adventure</SelectItem>
+                        <SelectItem value="EDUCATIONAL">Educational</SelectItem>
+                        <SelectItem value="CUSTOM">Custom Types</SelectItem>
                       </SelectContent>
                     </Select>
 
@@ -359,10 +542,10 @@ export default function RetreatList() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="full">Full</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
+                        <SelectItem value="ACTIVE">Active</SelectItem>
+                        <SelectItem value="DRAFT">Draft</SelectItem>
+                        <SelectItem value="FULL">Full</SelectItem>
+                        <SelectItem value="ARCHIVED">Archived</SelectItem>
                       </SelectContent>
                     </Select>
 
@@ -434,20 +617,30 @@ export default function RetreatList() {
                     >
                       <Card className="card-premium border-refined hover:shadow-lg transition-all duration-300 group">
                         <div className="relative">
-                          <div className="h-48 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-t-lg flex items-center justify-center">
-                            <div className="text-center">
-                              <Calendar className="w-12 h-12 text-blue-400 mx-auto mb-2" />
-                              <p className="text-sm text-blue-600 font-medium">{retreat.title}</p>
+                          {retreat.images && retreat.images.length > 0 ? (
+                            <div className="h-48 rounded-t-lg overflow-hidden">
+                              <img
+                                src={retreat.images[0]}
+                                alt={retreat.title}
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
                             </div>
-                          </div>
+                          ) : (
+                            <div className="h-48 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-t-lg flex items-center justify-center">
+                              <div className="text-center">
+                                <Calendar className="w-12 h-12 text-blue-400 mx-auto mb-2" />
+                                <p className="text-sm text-blue-600 font-medium">{retreat.title}</p>
+                              </div>
+                            </div>
+                          )}
                           
                           <div className="absolute top-3 right-3 flex space-x-2">
                             <Badge className={cn("text-xs", getTypeColor(retreat.type))}>
-                              {retreat.type}
+                              {getTypeLabel(retreat)}
                             </Badge>
                             <Badge className={cn("text-xs", getStatusColor(retreat.status))}>
                               <StatusIcon className="w-3 h-3 mr-1" />
-                              {retreat.status}
+                              {getStatusLabel(retreat.status)}
                             </Badge>
                           </div>
                         </div>
@@ -556,11 +749,11 @@ export default function RetreatList() {
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem 
-                                  onClick={() => handleArchive(retreat)}
+                                  onClick={() => handleDeleteClick(retreat)}
                                   className="text-red-600"
                                 >
-                                  <Archive className="w-4 h-4 mr-2" />
-                                  Archive
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -603,13 +796,13 @@ export default function RetreatList() {
                               </TableCell>
                               <TableCell>
                                 <Badge className={cn("text-xs", getTypeColor(retreat.type))}>
-                                  {retreat.type}
+                                  {getTypeLabel(retreat)}
                                 </Badge>
                               </TableCell>
                               <TableCell>
                                 <Badge className={cn("text-xs", getStatusColor(retreat.status))}>
                                   <StatusIcon className="w-3 h-3 mr-1" />
-                                  {retreat.status}
+                                  {getStatusLabel(retreat.status)}
                                 </Badge>
                               </TableCell>
                               <TableCell>{retreat.duration} days</TableCell>
@@ -670,11 +863,11 @@ export default function RetreatList() {
                                       </DropdownMenuItem>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuItem 
-                                        onClick={() => handleArchive(retreat)}
+                                        onClick={() => handleDeleteClick(retreat)}
                                         className="text-red-600"
                                       >
-                                        <Archive className="w-4 h-4 mr-2" />
-                                        Archive
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
@@ -717,6 +910,63 @@ export default function RetreatList() {
           </motion.div>
         </main>
       </div>
+
+      {/* Delete Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Retreat</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{retreatToDelete?.title}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {retreatToDelete && (
+            <div className="py-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">{retreatToDelete.title}</h4>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <div>Type: {getTypeLabel(retreatToDelete)}</div>
+                  <div>Instructor: {retreatToDelete.instructor}</div>
+                  <div>Current Bookings: {retreatToDelete.currentBookings}</div>
+                </div>
+              </div>
+              
+              {retreatToDelete.currentBookings > 0 && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">
+                    ⚠️ Warning: This retreat has {retreatToDelete.currentBookings} active booking(s). 
+                    Deleting it may affect existing customers.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end space-x-3">
+            <Button variant="outline" onClick={handleDeleteCancel} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Retreat
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

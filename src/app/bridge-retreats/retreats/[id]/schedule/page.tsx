@@ -115,256 +115,53 @@ export default function RetreatSchedule() {
   }, [retreatId]);
 
   const fetchScheduleData = async () => {
-    // Mock data - in production, this would come from an API
-    const mockInstructors: Instructor[] = [
-      {
-        id: "1",
-        name: "Sarah Chen",
-        specialties: ["Meditation", "Mindfulness", "Yoga"],
-        availability: ["morning", "afternoon", "evening"]
-      },
-      {
-        id: "2",
-        name: "Maya Patel",
-        specialties: ["Hatha Yoga", "Vinyasa", "Breathwork"],
-        availability: ["morning", "afternoon"]
-      },
-      {
-        id: "3",
-        name: "Dr. James Wilson",
-        specialties: ["Nutrition", "Wellness Coaching", "Workshops"],
-        availability: ["afternoon", "evening"]
+    try {
+      const response = await fetch(`/api/bridge-retreats/retreats/${retreatId}/schedule`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch schedule data');
       }
-    ];
 
-    const mockResources: Resource[] = [
-      {
-        id: "1",
-        name: "Main Meditation Hall",
-        type: "room",
-        capacity: 30,
-        location: "Building A"
-      },
-      {
-        id: "2",
-        name: "Yoga Studio",
-        type: "room",
-        capacity: 25,
-        location: "Building B"
-      },
-      {
-        id: "3",
-        name: "Garden Pavilion",
-        type: "room",
-        capacity: 20,
-        location: "Outdoor"
-      },
-      {
-        id: "4",
-        name: "Meditation Cushions",
-        type: "equipment",
-        location: "Storage Room"
-      },
-      {
-        id: "5",
-        name: "Yoga Mats",
-        type: "equipment",
-        location: "Yoga Studio"
+      const data = await response.json();
+      
+      // If no schedule exists, create empty schedule based on retreat duration
+      let scheduleData = data.schedule;
+      if (!scheduleData || scheduleData.length === 0) {
+        // Fetch retreat details to get duration
+        const retreatResponse = await fetch(`/api/bridge-retreats/retreats/${retreatId}`);
+        const retreatData = await retreatResponse.json();
+        
+        // Create empty schedule for each day
+        scheduleData = [];
+        for (let day = 1; day <= (retreatData.duration || 7); day++) {
+          const startDate = new Date(retreatData.startDate);
+          const dayDate = new Date(startDate.getTime() + (day - 1) * 24 * 60 * 60 * 1000);
+          
+          scheduleData.push({
+            day,
+            date: dayDate.toISOString().split('T')[0],
+            activities: [],
+            notes: ''
+          });
+        }
       }
-    ];
-
-    const mockSchedule: DaySchedule[] = [
-      {
-        day: 1,
-        date: "2025-02-15",
-        activities: [
-          {
-            id: "1",
-            time: "07:00",
-            name: "Morning Meditation",
-            description: "Start the day with guided meditation to center your mind",
-            duration: 60,
-            instructor: "Sarah Chen",
-            location: "Main Meditation Hall",
-            capacity: 20,
-            currentParticipants: 18,
-            resources: ["Meditation Cushions"],
-            type: "session",
-            isRequired: true
-          },
-          {
-            id: "2",
-            time: "08:30",
-            name: "Breakfast",
-            description: "Nutritious vegetarian breakfast",
-            duration: 60,
-            instructor: "",
-            location: "Dining Hall",
-            capacity: 30,
-            currentParticipants: 18,
-            resources: [],
-            type: "meal",
-            isRequired: true
-          },
-          {
-            id: "3",
-            time: "10:00",
-            name: "Welcome Circle",
-            description: "Introduction and setting intentions for the retreat",
-            duration: 90,
-            instructor: "Sarah Chen",
-            location: "Garden Pavilion",
-            capacity: 20,
-            currentParticipants: 18,
-            resources: [],
-            type: "session",
-            isRequired: true
-          },
-          {
-            id: "4",
-            time: "12:00",
-            name: "Lunch",
-            description: "Mindful eating practice",
-            duration: 90,
-            instructor: "",
-            location: "Dining Hall",
-            capacity: 30,
-            currentParticipants: 18,
-            resources: [],
-            type: "meal",
-            isRequired: true
-          },
-          {
-            id: "5",
-            time: "14:00",
-            name: "Hatha Yoga",
-            description: "Gentle yoga practice to prepare the body for meditation",
-            duration: 90,
-            instructor: "Maya Patel",
-            location: "Yoga Studio",
-            capacity: 20,
-            currentParticipants: 18,
-            resources: ["Yoga Mats"],
-            type: "activity",
-            isRequired: false
-          },
-          {
-            id: "6",
-            time: "16:00",
-            name: "Tea Break",
-            description: "Herbal tea and light snacks",
-            duration: 30,
-            instructor: "",
-            location: "Garden Pavilion",
-            capacity: 30,
-            currentParticipants: 18,
-            resources: [],
-            type: "break",
-            isRequired: true
-          },
-          {
-            id: "7",
-            time: "16:30",
-            name: "Walking Meditation",
-            description: "Mindful walking in nature",
-            duration: 45,
-            instructor: "Sarah Chen",
-            location: "Nature Trail",
-            capacity: 20,
-            currentParticipants: 15,
-            resources: [],
-            type: "activity",
-            isRequired: false
-          },
-          {
-            id: "8",
-            time: "18:00",
-            name: "Dinner",
-            description: "Organic vegetarian dinner",
-            duration: 90,
-            instructor: "",
-            location: "Dining Hall",
-            capacity: 30,
-            currentParticipants: 18,
-            resources: [],
-            type: "meal",
-            isRequired: true
-          },
-          {
-            id: "9",
-            time: "20:00",
-            name: "Evening Reflection",
-            description: "Group sharing and reflection on the day",
-            duration: 60,
-            instructor: "Sarah Chen",
-            location: "Main Meditation Hall",
-            capacity: 20,
-            currentParticipants: 18,
-            resources: ["Meditation Cushions"],
-            type: "session",
-            isRequired: true
-          }
-        ],
-        notes: "First day focuses on settling in and introduction to practices"
-      },
-      {
-        day: 2,
-        date: "2025-02-16",
-        activities: [
-          {
-            id: "10",
-            time: "07:00",
-            name: "Morning Meditation",
-            description: "Silent meditation practice",
-            duration: 60,
-            instructor: "Sarah Chen",
-            location: "Main Meditation Hall",
-            capacity: 20,
-            currentParticipants: 18,
-            resources: ["Meditation Cushions"],
-            type: "session",
-            isRequired: true
-          },
-          {
-            id: "11",
-            time: "08:30",
-            name: "Breakfast",
-            description: "Nutritious vegetarian breakfast",
-            duration: 60,
-            instructor: "",
-            location: "Dining Hall",
-            capacity: 30,
-            currentParticipants: 18,
-            resources: [],
-            type: "meal",
-            isRequired: true
-          },
-          {
-            id: "12",
-            time: "10:00",
-            name: "Mindfulness Workshop",
-            description: "Deep dive into mindfulness techniques and applications",
-            duration: 120,
-            instructor: "Dr. James Wilson",
-            location: "Main Meditation Hall",
-            capacity: 20,
-            currentParticipants: 18,
-            resources: ["Workshop Materials"],
-            type: "session",
-            isRequired: true
-          }
-        ],
-        notes: "Focus on deepening mindfulness practice"
-      }
-    ];
-
-    setTimeout(() => {
-      setSchedule(mockSchedule);
-      setInstructors(mockInstructors);
-      setResources(mockResources);
+      
+      setSchedule(scheduleData);
+      setInstructors(data.instructors || []);
+      setResources(data.resources || []);
       setLoading(false);
-      checkConflicts(mockSchedule);
-    }, 1000);
+      checkConflicts(scheduleData);
+    } catch (error) {
+      console.error('Error fetching schedule data:', error);
+      setLoading(false);
+      // Create a basic empty schedule as fallback
+      setSchedule([{
+        day: 1,
+        date: new Date().toISOString().split('T')[0],
+        activities: [],
+        notes: ''
+      }]);
+    }
   };
 
   const checkConflicts = (scheduleData: DaySchedule[]) => {
@@ -438,12 +235,12 @@ export default function RetreatSchedule() {
     if (!newActivity.name || !newActivity.time) return;
     
     const activity: ScheduleActivity = {
-      id: Date.now().toString(),
+      id: `temp-${Date.now()}`,
       time: newActivity.time!,
       name: newActivity.name!,
       description: newActivity.description || "",
       duration: newActivity.duration || 60,
-      instructor: newActivity.instructor || "",
+      instructor: newActivity.instructor === "none" ? "" : (newActivity.instructor || ""),
       location: newActivity.location || "",
       capacity: newActivity.capacity || 20,
       currentParticipants: 0,
@@ -480,25 +277,58 @@ export default function RetreatSchedule() {
     });
   };
 
-  const deleteActivity = (activityId: string) => {
-    const updatedSchedule = schedule.map(day => {
-      if (day.day === activeDay) {
-        return {
-          ...day,
-          activities: day.activities.filter(a => a.id !== activityId)
-        };
-      }
-      return day;
-    });
+  const deleteActivity = async (activityId: string) => {
+    try {
+      // If it's a new activity (not saved to database), just remove from local state
+      if (activityId.startsWith('temp-') || activityId === Date.now().toString()) {
+        const updatedSchedule = schedule.map(day => {
+          if (day.day === activeDay) {
+            return {
+              ...day,
+              activities: day.activities.filter(a => a.id !== activityId)
+            };
+          }
+          return day;
+        });
 
-    setSchedule(updatedSchedule);
-    checkConflicts(updatedSchedule);
+        setSchedule(updatedSchedule);
+        checkConflicts(updatedSchedule);
+        return;
+      }
+
+      // For saved activities, call the API
+      const response = await fetch(`/api/bridge-retreats/retreats/${retreatId}/schedule?activityId=${activityId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete activity');
+      }
+
+      // Update local state
+      const updatedSchedule = schedule.map(day => {
+        if (day.day === activeDay) {
+          return {
+            ...day,
+            activities: day.activities.filter(a => a.id !== activityId)
+          };
+        }
+        return day;
+      });
+
+      setSchedule(updatedSchedule);
+      checkConflicts(updatedSchedule);
+      
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+      alert('Failed to delete activity. Please try again.');
+    }
   };
 
   const duplicateActivity = (activity: ScheduleActivity) => {
     const newActivity: ScheduleActivity = {
       ...activity,
-      id: Date.now().toString(),
+      id: `temp-${Date.now()}`,
       time: addMinutes(activity.time, activity.duration),
       currentParticipants: 0
     };
@@ -523,7 +353,7 @@ export default function RetreatSchedule() {
       if (day.day === toDay) {
         const copiedActivities = sourceDay.activities.map(activity => ({
           ...activity,
-          id: `${activity.id}-copy-${Date.now()}`,
+          id: `temp-${activity.id}-copy-${Date.now()}`,
           currentParticipants: 0
         }));
         
@@ -541,12 +371,32 @@ export default function RetreatSchedule() {
 
   const handleSave = async () => {
     setSaving(true);
-    console.log('Saving schedule:', schedule);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setSaving(false);
+    try {
+      const response = await fetch(`/api/bridge-retreats/retreats/${retreatId}/schedule`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ schedule }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save schedule');
+      }
+
+      const result = await response.json();
+      console.log('Schedule saved successfully:', result);
+      
+      // Show success message (you can add a toast notification here)
+      alert('Schedule saved successfully!');
+      
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      alert('Failed to save schedule. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const currentDay = schedule.find(d => d.day === activeDay);
@@ -802,7 +652,7 @@ export default function RetreatSchedule() {
                                     <SelectValue placeholder="Select instructor" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="">No instructor</SelectItem>
+                                    <SelectItem value="none">No instructor</SelectItem>
                                     {instructors.map(instructor => (
                                       <SelectItem key={instructor.id} value={instructor.name}>
                                         {instructor.name}
@@ -1000,3 +850,6 @@ export default function RetreatSchedule() {
     </div>
   );
 } 
+ 
+ 
+ 

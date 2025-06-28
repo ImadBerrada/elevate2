@@ -235,3 +235,6 @@ function getFacilityAvailability(
   
   return availability;
 } 
+ 
+ 
+ 

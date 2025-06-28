@@ -633,3 +633,6 @@ export default function BookingPaymentPage() {
     </div>
   );
 } 
+ 
+ 
+ 

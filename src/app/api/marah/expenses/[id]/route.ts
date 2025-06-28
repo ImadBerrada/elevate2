@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
+import { withRole, AuthenticatedRequest } from '@/lib/middleware';
+import { verifyCompanyAccess } from '@/lib/company-access';
 
 const updateExpenseSchema = z.object({
   description: z.string().min(1, 'Description is required').optional(),
@@ -147,6 +148,6 @@ async function deleteHandler(
   }
 }
 
-export const GET = withAuth(getHandler);
-export const PUT = withAuth(putHandler);
-export const DELETE = withAuth(deleteHandler); 
+export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(getHandler);
+export const PUT = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(putHandler);
+export const DELETE = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(deleteHandler); 

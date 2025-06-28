@@ -7,86 +7,75 @@ const prisma = new PrismaClient();
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get('search');
-    const type = searchParams.get('type');
     const status = searchParams.get('status');
-    const location = searchParams.get('location');
-    const instructor = searchParams.get('instructor');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const type = searchParams.get('type');
+    const search = searchParams.get('search');
 
-    const where: any = {};
-
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { location: { contains: search, mode: 'insensitive' } },
-        { instructor: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    if (type && type !== 'all') {
-      where.type = type;
-    }
-
-    if (status && status !== 'all') {
-      where.status = status;
-    }
-
-    if (location) {
-      where.location = { contains: location, mode: 'insensitive' };
-    }
-
-    if (instructor) {
-      where.instructor = { contains: instructor, mode: 'insensitive' };
-    }
-
-    const [retreats, total] = await Promise.all([
-      prisma.retreat.findMany({
-        where,
-        include: {
-          activities: true,
-          bookings: {
-            include: {
-              guest: true,
-            },
-          },
-          reviews: {
-            select: {
-              rating: true,
-            },
-          },
-          _count: {
-            select: {
-              bookings: true,
-              reviews: true,
-            },
-          },
+    const retreats = await prisma.retreat.findMany({
+      where: {
+        ...(status && { status: status as any }),
+        ...(type && { type: type as any }),
+        ...(search && {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+            { location: { contains: search, mode: 'insensitive' } }
+          ]
+        })
+      },
+      include: {
+        activities: {
+          select: {
+            name: true,
+            description: true,
+            duration: true
+          }
         },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      }),
-      prisma.retreat.count({ where }),
-    ]);
-
-    // Calculate derived fields
-    const retreatsWithStats = retreats.map(retreat => ({
-      ...retreat,
-      currentBookings: retreat._count.bookings,
-      totalReviews: retreat._count.reviews,
-      rating: retreat.reviews?.length > 0 
-        ? retreat.reviews.reduce((sum: number, review: any) => sum + review.rating, 0) / retreat.reviews.length 
-        : 0,
-    }));
-
-    return NextResponse.json({
-      retreats: retreatsWithStats,
-      total,
-      limit,
-      offset,
+        bookings: {
+          select: {
+            id: true,
+            status: true,
+            numberOfGuests: true,
+            totalAmount: true
+          }
+        },
+        reviews: {
+          select: {
+            rating: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
     });
+
+    // Calculate statistics for each retreat
+    const retreatsWithStats = retreats.map(retreat => {
+      const totalBookings = retreat.bookings.length;
+      const confirmedBookings = retreat.bookings.filter(b => b.status === 'CONFIRMED');
+      const completedBookings = retreat.bookings.filter(b => b.status === 'COMPLETED');
+      const totalGuests = retreat.bookings.reduce((sum, b) => sum + b.numberOfGuests, 0);
+      const totalRevenue = completedBookings.reduce((sum, b) => sum + b.totalAmount, 0);
+      const averageRating = retreat.reviews.length > 0 
+        ? retreat.reviews.reduce((sum, r) => sum + r.rating, 0) / retreat.reviews.length 
+        : 0;
+
+      return {
+        ...retreat,
+        stats: {
+          totalBookings,
+          confirmedBookings: confirmedBookings.length,
+          completedBookings: completedBookings.length,
+          totalGuests,
+          totalRevenue,
+          averageRating: Math.round(averageRating * 10) / 10,
+          occupancyRate: retreat.capacity > 0 ? Math.round((totalGuests / retreat.capacity) * 100) : 0
+        }
+      };
+    });
+
+    return NextResponse.json({ retreats: retreatsWithStats });
   } catch (error) {
     console.error('Error fetching retreats:', error);
     return NextResponse.json(
@@ -100,91 +89,194 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log('=== RETREAT CREATION API DEBUG ===');
+    console.log('Received body:', JSON.stringify(body, null, 2));
     
     const {
       title,
       description,
       type,
+      customTypeName,
+      status,
       duration,
-      capacity,
-      price,
       startDate,
       endDate,
       location,
+      facilityId,
+      capacity,
+      price,
       instructor,
-      amenities = [],
-      requirements = [],
-      activities = [],
-      inclusions = [],
-      exclusions = [],
+      amenities,
+      inclusions,
+      requirements,
       cancellationPolicy,
-      specialInstructions,
-      images = [],
-      status = 'draft',
+      images,
+      activities,
+      // Property-like fields
+      totalRooms,
+      occupiedRooms,
+      occupancyRate,
+      expectedRevenue,
+      expectedExpenses,
+      netIncome,
+      facilitiesIncluded,
+      roomTypes,
+      seasonalPricing,
+      depositRequired,
+      refundPolicy,
+      minimumStay,
+      maximumStay,
+      checkInTime,
+      checkOutTime,
+      ageRestrictions,
+      healthRequirements,
+      emergencyContact,
+      emergencyPhone,
+      insuranceCoverage,
+      certifications,
+      staffCount,
+      languages,
+      specialInstructions
     } = body;
 
     // Validate required fields
-    if (!title || !description || !type || !duration || !capacity || !price || !startDate || !endDate || !location || !instructor) {
+    if (!title || !description || !location || !instructor || !startDate || !endDate) {
+      console.log('Validation failed: Missing required fields');
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: title, description, location, instructor, startDate, endDate' },
         { status: 400 }
       );
     }
+
+    // Validate dates
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      if (start >= end) {
+        console.log('Validation failed: End date must be after start date');
+        return NextResponse.json(
+          { error: 'End date must be after start date' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Handle custom types and type mapping
+    const typeMapping: { [key: string]: string } = {
+      'wellness': 'WELLNESS',
+      'corporate': 'CORPORATE',
+      'spiritual': 'SPIRITUAL',
+      'adventure': 'ADVENTURE',
+      'educational': 'EDUCATIONAL'
+    };
+    
+    const finalType = customTypeName ? 'CUSTOM' : (typeMapping[type] || type || 'WELLNESS');
+    
+    console.log('Creating retreat with data:', {
+      title,
+      description,
+      type: finalType,
+      customTypeName,
+      status: status || 'DRAFT',
+      duration: duration || 1,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      location,
+      facilityId,
+      capacity: capacity || 20,
+      price: price ? parseFloat(price.toString()) : 0,
+      instructor,
+      amenities: amenities || [],
+      inclusions: inclusions || [],
+      requirements: requirements || [],
+      cancellationPolicy,
+      images: images || [],
+      activities: activities || []
+    });
 
     // Create retreat with activities
     const retreat = await prisma.retreat.create({
       data: {
         title,
         description,
-        type,
-        duration: parseInt(duration),
-        capacity: parseInt(capacity),
-        price: parseFloat(price),
+        type: finalType,
+        customTypeName,
+        status: status || 'DRAFT',
+        duration: duration || 1,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         location,
+        facilityId: facilityId || null,
+        capacity: capacity || 20,
+        price: price ? parseFloat(price.toString()) : 0,
         instructor,
-        amenities,
-        requirements,
-        inclusions,
-        exclusions,
+        amenities: amenities || [],
+        inclusions: inclusions || [],
+        requirements: requirements || [],
         cancellationPolicy,
+        images: images || [],
+        // Property-like fields
+        totalRooms: totalRooms || 0,
+        occupiedRooms: occupiedRooms || 0,
+        occupancyRate: occupancyRate || 0,
+        expectedRevenue: expectedRevenue || 0,
+        expectedExpenses: expectedExpenses || 0,
+        netIncome: netIncome || 0,
+        facilitiesIncluded: facilitiesIncluded || [],
+        depositRequired: depositRequired || 0,
+        refundPolicy,
+        minimumStay: minimumStay || 0,
+        maximumStay: maximumStay || 0,
+        checkInTime,
+        checkOutTime,
+        ageRestrictions,
+        healthRequirements: healthRequirements || [],
+        emergencyContact,
+        emergencyPhone,
+        insuranceCoverage,
+        certifications: certifications || [],
+        staffCount: staffCount || 0,
+        languages: languages || [],
         specialInstructions,
-        images,
-        status,
-        activities: {
-          create: activities.map((activity: any) => ({
-            name: activity.name,
-            description: activity.description,
-            duration: activity.duration,
-            instructor: activity.instructor,
-            capacity: activity.capacity,
-            equipment: activity.equipment || [],
-          })),
-        },
+        // Create activities if provided
+        ...(activities && activities.length > 0 && {
+          activities: {
+            create: activities.map((activity: any) => ({
+              name: activity.name,
+              description: activity.description,
+              duration: activity.duration || 60,
+              instructor: activity.instructor || instructor,
+              capacity: activity.capacity || capacity,
+              equipment: activity.equipment || []
+            }))
+          }
+        })
       },
       include: {
         activities: true,
-        _count: {
-          select: {
-            bookings: true,
-            reviews: true,
-          },
-        },
-      },
+        facility: {
+          include: {
+            amenities: true,
+            rooms: true
+          }
+        }
+      }
     });
 
-    return NextResponse.json({
-      ...retreat,
-      currentBookings: retreat._count.bookings,
-      totalReviews: retreat._count.reviews,
-      rating: 0,
-    });
+    console.log('Retreat created successfully:', retreat);
+    console.log('=================================');
+
+    return NextResponse.json({ retreat }, { status: 201 });
   } catch (error) {
     console.error('Error creating retreat:', error);
+    console.log('=================================');
     return NextResponse.json(
-      { error: 'Failed to create retreat' },
+      { error: 'Failed to create retreat', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
 } 
+ 
+ 
+ 

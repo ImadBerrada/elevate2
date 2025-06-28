@@ -36,7 +36,8 @@ import {
   Mountain,
   Sunrise,
   Plus,
-  X
+  X,
+  Trash2
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,12 +47,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -150,18 +154,36 @@ const AMENITY_LABELS: { [key: string]: string } = {
 export default function RetreatDetails() {
   const { isOpen, isMobile, isTablet, isDesktop } = useSidebar();
   const params = useParams();
+  const router = useRouter();
   const retreatId = params.id as string;
   const [retreat, setRetreat] = useState<Retreat | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRetreatDetails();
   }, [retreatId]);
 
   const fetchRetreatDetails = async () => {
-    // Mock data - in production, this would come from an API
-    const mockRetreat: Retreat = {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Try to fetch from API first
+      try {
+        const data = await apiClient.getRetreatById(retreatId);
+        setRetreat(data);
+        setLoading(false);
+        return;
+      } catch (apiError) {
+        console.log('API not available, using mock data');
+      }
+      
+      // Fallback to mock data - in production, this would come from an API
+      const mockRetreat: Retreat = {
       id: retreatId,
       title: "Mindfulness & Meditation Retreat",
       description: "A transformative 7-day journey into mindfulness and inner peace. This comprehensive retreat combines ancient meditation practices with modern wellness techniques to help you find balance, reduce stress, and cultivate lasting inner peace. Set in a serene mountain environment, you'll disconnect from daily distractions and reconnect with your true self.",
@@ -311,27 +333,40 @@ export default function RetreatDetails() {
       updatedAt: "2025-01-15"
     };
 
-    setTimeout(() => {
-      setRetreat(mockRetreat);
+      setTimeout(() => {
+        setRetreat(mockRetreat);
+        setLoading(false);
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to fetch retreat details:', err);
+      setError('Failed to load retreat details. Please try again.');
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'draft': return 'bg-yellow-100 text-yellow-800';
-      case 'archived': return 'bg-gray-100 text-gray-800';
-      case 'full': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'ACTIVE': 
+      case 'active': return 'bg-green-100 text-green-800 border-green-200';
+      case 'DRAFT':
+      case 'draft': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'ARCHIVED':
+      case 'archived': return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'FULL':
+      case 'full': return 'bg-blue-100 text-blue-800 border-blue-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'ACTIVE':
       case 'active': return CheckCircle;
+      case 'DRAFT':
       case 'draft': return AlertCircle;
+      case 'ARCHIVED':
       case 'archived': return Archive;
+      case 'FULL':
       case 'full': return Pause;
       default: return AlertCircle;
     }
@@ -353,6 +388,43 @@ export default function RetreatDetails() {
       case 'refunded': return 'bg-blue-100 text-blue-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+    setError(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!retreat) return;
+
+    try {
+      setDeleting(true);
+      setError(null);
+
+      console.log('=== RETREAT DELETION DEBUG ===');
+      console.log('Deleting retreat:', retreat.title);
+      console.log('Retreat ID:', retreat.id);
+
+      await apiClient.deleteRetreat(retreat.id);
+
+      console.log('Retreat deleted successfully');
+      console.log('==============================');
+
+      // Redirect to retreats list
+      router.push('/bridge-retreats/retreats');
+
+    } catch (err) {
+      console.error('Failed to delete retreat:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete retreat');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setError(null);
   };
 
   if (loading) {
@@ -484,9 +556,12 @@ export default function RetreatDetails() {
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-red-600">
-                      <Archive className="w-4 h-4 mr-2" />
-                      Archive Retreat
+                    <DropdownMenuItem 
+                      onClick={handleDeleteClick}
+                      className="text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Retreat
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -593,8 +668,9 @@ export default function RetreatDetails() {
             transition={{ delay: 0.2 }}
           >
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6">
+              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-7">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="images">Images</TabsTrigger>
                 <TabsTrigger value="bookings">Bookings</TabsTrigger>
                 <TabsTrigger value="activities">Activities</TabsTrigger>
                 <TabsTrigger value="schedule">Schedule</TabsTrigger>
@@ -738,6 +814,76 @@ export default function RetreatDetails() {
                 </div>
               </TabsContent>
 
+              {/* Images Tab */}
+              <TabsContent value="images">
+                <Card className="card-premium border-refined">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <ImageIcon className="w-5 h-5 mr-2" />
+                      Retreat Images ({retreat.images.length})
+                    </CardTitle>
+                    <CardDescription>
+                      View all images for this retreat
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {retreat.images.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {retreat.images.map((image, index) => (
+                          <motion.div
+                            key={index}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.1 * index }}
+                            className="group relative"
+                          >
+                            <div className="aspect-video rounded-lg overflow-hidden bg-gray-100">
+                              <img
+                                src={image}
+                                alt={`${retreat.title} - Image ${index + 1}`}
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
+                            </div>
+                            {index === 0 && (
+                              <div className="absolute top-2 left-2">
+                                <Badge className="bg-blue-600 text-white text-xs">
+                                  Main Image
+                                </Badge>
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 rounded-lg flex items-center justify-center">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                                onClick={() => window.open(image, '_blank')}
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                                View Full Size
+                              </Button>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <ImageIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Images Available</h3>
+                        <p className="text-muted-foreground mb-4">
+                          No images have been uploaded for this retreat yet.
+                        </p>
+                        <Link href={`/bridge-retreats/retreats/${retreat.id}/edit`}>
+                          <Button>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Images
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               {/* Bookings Tab */}
               <TabsContent value="bookings">
                 <Card className="card-premium border-refined">
@@ -755,31 +901,38 @@ export default function RetreatDetails() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {retreat.bookings.map((booking) => (
+                      {retreat.bookings && retreat.bookings.length > 0 ? retreat.bookings.map((booking) => (
                         <div key={booking.id} className="p-4 border border-gray-200 rounded-lg">
                           <div className="flex items-start justify-between">
                             <div className="space-y-2">
                               <div className="flex items-center space-x-3">
                                 <Avatar className="w-10 h-10">
                                   <AvatarFallback>
-                                    {booking.guestName.split(' ').map(n => n[0]).join('')}
+                                    {booking.guestName ? 
+                                      booking.guestName.split(' ').map(n => n[0]).join('') : 
+                                      'G'
+                                    }
                                   </AvatarFallback>
                                 </Avatar>
                                 <div>
-                                  <div className="font-medium">{booking.guestName}</div>
-                                  <div className="text-sm text-muted-foreground">{booking.email}</div>
+                                  <div className="font-medium">{booking.guestName || 'Guest'}</div>
+                                  <div className="text-sm text-muted-foreground">{booking.email || 'No email'}</div>
                                 </div>
                               </div>
                               
                               <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                                <div className="flex items-center space-x-1">
-                                  <Phone className="w-4 h-4" />
-                                  <span>{booking.phone}</span>
-                                </div>
-                                <div className="flex items-center space-x-1">
-                                  <Calendar className="w-4 h-4" />
-                                  <span>Booked {new Date(booking.bookingDate).toLocaleDateString()}</span>
-                                </div>
+                                {booking.phone && (
+                                  <div className="flex items-center space-x-1">
+                                    <Phone className="w-4 h-4" />
+                                    <span>{booking.phone}</span>
+                                  </div>
+                                )}
+                                {booking.bookingDate && (
+                                  <div className="flex items-center space-x-1">
+                                    <Calendar className="w-4 h-4" />
+                                    <span>Booked {new Date(booking.bookingDate).toLocaleDateString()}</span>
+                                  </div>
+                                )}
                               </div>
                               
                               {booking.specialRequests && (
@@ -792,20 +945,32 @@ export default function RetreatDetails() {
                             
                             <div className="text-right space-y-2">
                               <div className="text-lg font-semibold">
-                                AED {booking.amount.toLocaleString()}
+                                AED {booking.amount ? booking.amount.toLocaleString() : '0'}
                               </div>
                               <div className="flex space-x-2">
-                                <Badge className={getBookingStatusColor(booking.status)}>
-                                  {booking.status}
-                                </Badge>
-                                <Badge className={getPaymentStatusColor(booking.paymentStatus)}>
-                                  {booking.paymentStatus}
-                                </Badge>
+                                {booking.status && (
+                                  <Badge className={getBookingStatusColor(booking.status)}>
+                                    {booking.status}
+                                  </Badge>
+                                )}
+                                {booking.paymentStatus && (
+                                  <Badge className={getPaymentStatusColor(booking.paymentStatus)}>
+                                    {booking.paymentStatus}
+                                  </Badge>
+                                )}
                               </div>
                             </div>
                           </div>
                         </div>
-                      ))}
+                      )) : (
+                        <div className="text-center py-8">
+                          <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Bookings Yet</h3>
+                          <p className="text-muted-foreground">
+                            This retreat doesn't have any bookings yet.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -822,7 +987,7 @@ export default function RetreatDetails() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {retreat.activities.map((activity) => (
+                      {retreat.activities && retreat.activities.length > 0 ? retreat.activities.map((activity) => (
                         <div key={activity.id} className="p-4 border border-gray-200 rounded-lg space-y-3">
                           <div>
                             <h4 className="font-medium text-gray-900">{activity.name}</h4>
@@ -851,7 +1016,15 @@ export default function RetreatDetails() {
                             </div>
                           )}
                         </div>
-                      ))}
+                      )) : (
+                        <div className="text-center py-8">
+                          <Activity className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Activities Planned</h3>
+                          <p className="text-muted-foreground">
+                            Activities for this retreat haven't been added yet.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -876,28 +1049,38 @@ export default function RetreatDetails() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-6">
-                      {retreat.schedule.map((day) => (
-                        <div key={day.day} className="border border-gray-200 rounded-lg p-4">
-                          <h4 className="font-medium text-gray-900 mb-4">Day {day.day}</h4>
-                          
-                          <div className="space-y-3">
-                            {day.activities.map((activity, index) => (
-                              <div key={index} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                                <div className="text-sm font-medium text-gray-900 w-16">
-                                  {activity.time}
-                                </div>
-                                <div className="flex-1">
-                                  <div className="font-medium text-gray-900">{activity.activityName}</div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {activity.duration} minutes
-                                    {activity.instructor && ` • ${activity.instructor}`}
+                      {retreat.schedule && retreat.schedule.length > 0 ? (
+                        retreat.schedule.map((day) => (
+                          <div key={day.day} className="border border-gray-200 rounded-lg p-4">
+                            <h4 className="font-medium text-gray-900 mb-4">Day {day.day}</h4>
+                            
+                            <div className="space-y-3">
+                              {day.activities.map((activity, index) => (
+                                <div key={index} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+                                  <div className="text-sm font-medium text-gray-900 w-16">
+                                    {activity.time}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="font-medium text-gray-900">{activity.activityName}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {activity.duration} minutes
+                                      {activity.instructor && ` • ${activity.instructor}`}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8">
+                          <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Schedule Available</h3>
+                          <p className="text-muted-foreground">
+                            The detailed schedule for this retreat hasn't been created yet.
+                          </p>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -1005,6 +1188,69 @@ export default function RetreatDetails() {
           </motion.div>
         </main>
       </div>
+
+      {/* Delete Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Retreat</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{retreat?.title}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {retreat && (
+            <div className="py-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">{retreat.title}</h4>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <div>Type: {retreat.type}</div>
+                  <div>Instructor: {retreat.instructor}</div>
+                  <div>Current Bookings: {retreat.currentBookings}</div>
+                </div>
+              </div>
+              
+              {retreat.currentBookings > 0 && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">
+                    ⚠️ Warning: This retreat has {retreat.currentBookings} active booking(s). 
+                    Deleting it may affect existing customers.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="flex justify-end space-x-3">
+            <Button variant="outline" onClick={handleDeleteCancel} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <Archive className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Retreat
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-} 
+}

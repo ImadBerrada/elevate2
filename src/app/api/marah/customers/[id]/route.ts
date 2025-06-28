@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
+import { withRole, AuthenticatedRequest } from '@/lib/middleware';
+import { verifyCompanyAccess } from '@/lib/company-access';
 
 const updateCustomerSchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
@@ -48,9 +49,10 @@ async function getHandler(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    // Verify company belongs to user
-    if (customer.company.userId !== request.user!.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // Verify user has access to this company
+    const hasAccess = await verifyCompanyAccess(request.user!.userId, request.user!.role, customer.companyId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Company access denied' }, { status: 403 });
     }
 
     // Calculate customer statistics
@@ -195,6 +197,6 @@ async function deleteHandler(
   }
 }
 
-export const GET = withAuth(getHandler);
-export const PUT = withAuth(putHandler);
-export const DELETE = withAuth(deleteHandler); 
+export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(getHandler);
+export const PUT = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(putHandler);
+export const DELETE = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(deleteHandler); 

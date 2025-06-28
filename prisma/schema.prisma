@@ -1345,6 +1345,7 @@ model Retreat {
   title               String
   description         String
   type                RetreatType
+  customTypeName      String?       // For custom retreat types
   status              RetreatStatus @default(DRAFT)
   duration            Int           // Duration in days
   capacity            Int
@@ -1352,6 +1353,7 @@ model Retreat {
   startDate           DateTime
   endDate             DateTime
   location            String
+  facilityId          String?       // Link to retreat facility
   instructor          String
   amenities           String[]      // Array of amenities
   requirements        String[]      // Array of requirements
@@ -1360,13 +1362,40 @@ model Retreat {
   cancellationPolicy  String?
   specialInstructions String?
   images              String[]      // Array of image URLs
+  
+  // Property-like fields
+  totalRooms          Int?          @default(0)
+  occupiedRooms       Int?          @default(0)
+  occupancyRate       Float?        @default(0)
+  expectedRevenue     Float?        @default(0)
+  expectedExpenses    Float?        @default(0)
+  netIncome           Float?        @default(0)
+  facilitiesIncluded  String[]      @default([])
+  depositRequired     Float?        @default(0)
+  refundPolicy        String?
+  minimumStay         Int?          @default(0)
+  maximumStay         Int?          @default(0)
+  checkInTime         String?
+  checkOutTime        String?
+  ageRestrictions     String?
+  healthRequirements  String[]      @default([])
+  emergencyContact    String?
+  emergencyPhone      String?
+  insuranceCoverage   String?
+  certifications      String[]      @default([])
+  staffCount          Int?          @default(0)
+  languages           String[]      @default([])
+  
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
   // Relations
+  facility   RetreatFacility?  @relation(fields: [facilityId], references: [id], onDelete: SetNull)
   activities RetreatActivity[]
+  scheduleActivities ScheduleActivity[] @relation("RetreatScheduleActivities")
   bookings   RetreatBooking[]
   reviews    RetreatReview[]
+  financialTransactions RetreatFinancialTransaction[]
 
   @@map("retreats")
 }
@@ -1390,26 +1419,111 @@ model RetreatActivity {
   @@map("retreat_activities")
 }
 
-// Guest model for managing retreat guests
-model RetreatGuest {
-  id          String      @id @default(cuid())
-  firstName   String
-  lastName    String
-  email       String      @unique
-  phone       String?
-  dateOfBirth DateTime?
-  nationality String?
-  address     String?
-  emergencyContact String?
-  emergencyPhone   String?
-  dietaryRestrictions String[]
-  medicalConditions   String[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+// Schedule activity model for managing detailed daily schedules
+model ScheduleActivity {
+  id                   String   @id @default(cuid())
+  retreatId            String
+  day                  Int      // Day number (1, 2, 3, etc.)
+  time                 String   // Time in HH:MM format
+  name                 String
+  description          String?
+  duration             Int      // Duration in minutes
+  instructor           String?
+  location             String?
+  capacity             Int      @default(20)
+  currentParticipants  Int      @default(0)
+  resources            String[] // Required resources/equipment
+  type                 ScheduleActivityType @default(SESSION)
+  isRequired           Boolean  @default(true)
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   // Relations
-  bookings RetreatBooking[]
-  reviews  RetreatReview[]
+  retreat Retreat @relation("RetreatScheduleActivities", fields: [retreatId], references: [id], onDelete: Cascade)
+
+  @@map("schedule_activities")
+}
+
+// Staff model for managing retreat staff and instructors
+model Staff {
+  id           String       @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String       @unique
+  phone        String?
+  role         StaffRole    @default(INSTRUCTOR)
+  status       StaffStatus  @default(ACTIVE)
+  specialties  String[]     @default([])
+  availability String[]     @default([])
+  bio          String?
+  image        String?
+  hireDate     DateTime?
+  salary       Float?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("staff")
+}
+
+// Guest model for managing retreat guests
+model RetreatGuest {
+  id                    String               @id @default(cuid())
+  firstName             String
+  lastName              String
+  email                 String               @unique
+  phone                 String?
+  dateOfBirth           DateTime?
+  nationality           String?
+  passportNumber        String?
+  gender                String?
+  status                RetreatGuestStatus   @default(ACTIVE)
+  
+  // Address Information
+  addressStreet         String?
+  addressCity           String?
+  addressState          String?
+  addressCountry        String?
+  addressPostalCode     String?
+  
+  // Emergency Contact
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  emergencyContactEmail String?
+  emergencyContactRelation String?
+  
+  // Preferences
+  dietaryRestrictions   String[]
+  roomTypePreference    String?
+  bedTypePreference     String?
+  smokingPreference     String?
+  specialRequests       String[]
+  
+  // Medical Information
+  medicalConditions     String[]
+  allergies             String[]
+  medications           String[]
+  
+  // Loyalty Program
+  loyaltyPoints         Int                  @default(0)
+  loyaltyTier           RetreatLoyaltyTier   @default(BRONZE)
+  loyaltyProgramActive  Boolean              @default(false)
+  marketingConsent      Boolean              @default(false)
+  
+  // Profile
+  profileImage          String?
+  notes                 String?
+  
+  // Timestamps
+  memberSince           DateTime             @default(now())
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  // Relations
+  bookings              RetreatBooking[]
+  reviews               RetreatReview[]
+  loyaltyTransactions   RetreatLoyaltyTransaction[]
+  communications        RetreatGuestCommunication[]
 
   @@map("retreat_guests")
 }
@@ -1429,12 +1543,28 @@ model RetreatBooking {
   paymentStatus   RetreatPaymentStatus @default(PENDING)
   specialRequests String?
   notes           String?
+  
+  // Room assignment
+  roomNumber      String?
+  roomType        String?
+  roomId          String?
+  
+  // Check-in/out details
+  actualCheckInTime  DateTime?
+  actualCheckOutTime DateTime?
+  checkInStaff       String?
+  checkOutStaff      String?
+  
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   // Relations
-  retreat Retreat      @relation(fields: [retreatId], references: [id], onDelete: Cascade)
-  guest   RetreatGuest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  retreat               Retreat                     @relation(fields: [retreatId], references: [id], onDelete: Cascade)
+  guest                 RetreatGuest                @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  room                  FacilityRoom?               @relation("RoomBookings", fields: [roomId], references: [id], onDelete: SetNull)
+  loyaltyTransactions   RetreatLoyaltyTransaction[]
+  communications        RetreatGuestCommunication[]
+  financialTransactions RetreatFinancialTransaction[]
 
   @@map("retreat_bookings")
 }
@@ -1447,6 +1577,18 @@ model RetreatReview {
   rating    Int      // 1-5 rating
   title     String?
   comment   String?
+  
+  // Detailed feedback ratings
+  serviceRating    Int?    // 1-5 rating for service
+  facilitiesRating Int?    // 1-5 rating for facilities
+  foodRating       Int?    // 1-5 rating for food
+  valueRating      Int?    // 1-5 rating for value
+  
+  // Additional feedback
+  highlights       String[] // What guest liked
+  issues           String[] // What could be improved
+  wouldRecommend   Boolean  @default(true)
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1456,6 +1598,43 @@ model RetreatReview {
 
   @@unique([retreatId, guestId]) // One review per guest per retreat
   @@map("retreat_reviews")
+}
+
+// Loyalty transaction model for tracking guest loyalty points
+model RetreatLoyaltyTransaction {
+  id          String                    @id @default(cuid())
+  guestId     String
+  type        RetreatLoyaltyTransactionType
+  points      Int
+  description String
+  bookingId   String?                   // Related booking if applicable
+  createdAt   DateTime                  @default(now())
+
+  // Relations
+  guest   RetreatGuest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  booking RetreatBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@map("retreat_loyalty_transactions")
+}
+
+// Guest communication model for tracking communications
+model RetreatGuestCommunication {
+  id          String                         @id @default(cuid())
+  guestId     String
+  type        RetreatCommunicationType
+  subject     String
+  message     String
+  direction   RetreatCommunicationDirection  // INBOUND or OUTBOUND
+  channel     String                         // email, phone, sms, in-person
+  staffMember String?                        // Who handled the communication
+  bookingId   String?                        // Related booking if applicable
+  createdAt   DateTime                       @default(now())
+
+  // Relations
+  guest   RetreatGuest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  booking RetreatBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@map("retreat_guest_communications")
 }
 
 // ========================================
@@ -1468,6 +1647,7 @@ enum RetreatType {
   SPIRITUAL
   ADVENTURE
   EDUCATIONAL
+  CUSTOM
 }
 
 enum RetreatStatus {
@@ -1490,4 +1670,636 @@ enum RetreatPaymentStatus {
   PARTIAL
   PAID
   REFUNDED
+}
+
+enum RetreatGuestStatus {
+  ACTIVE
+  INACTIVE
+  VIP
+  BLACKLISTED
+}
+
+enum RetreatLoyaltyTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum RetreatLoyaltyTransactionType {
+  EARNED
+  REDEEMED
+  EXPIRED
+  ADJUSTMENT
+}
+
+enum RetreatCommunicationType {
+  INQUIRY
+  COMPLAINT
+  COMPLIMENT
+  BOOKING_RELATED
+  GENERAL
+  MARKETING
+}
+
+enum RetreatCommunicationDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum ScheduleActivityType {
+  SESSION
+  MEAL
+  BREAK
+  ACTIVITY
+  FREE_TIME
+}
+
+enum StaffRole {
+  INSTRUCTOR
+  COORDINATOR
+  HOUSEKEEPER
+  MAINTENANCE
+  MANAGER
+  RECEPTIONIST
+}
+
+enum StaffStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+// ========================================
+// BRIDGE RETREATS FACILITY MODELS
+// ========================================
+
+// Facility model for managing retreat facilities
+model RetreatFacility {
+  id                  String               @id @default(cuid())
+  name                String
+  type                FacilityType
+  status              FacilityStatus       @default(OPERATIONAL)
+  capacity            Int
+  currentOccupancy    Int                  @default(0)
+  location            String
+  description         String?
+  manager             String
+  image               String?              // File path for uploaded image
+  
+  // Maintenance tracking
+  lastMaintenance     DateTime?
+  nextMaintenance     DateTime?
+  maintenanceNotes    String?
+  
+  // Ratings and performance
+  rating              Float                @default(0)
+  totalReviews        Int                  @default(0)
+  issueCount          Int                  @default(0)
+  
+  // Operating details
+  operatingHours      String?
+  temperature         Float?               // For climate-controlled facilities
+  hasWifi             Boolean              @default(false)
+  hasParking          Boolean              @default(false)
+  parkingSpots        Int?
+  
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  // Relations
+  retreats            Retreat[]
+  amenities           FacilityAmenity[]
+  maintenanceRequests FacilityMaintenanceRequest[]
+  bookings            FacilityBooking[]
+  rooms               FacilityRoom[]
+  financialTransactions RetreatFinancialTransaction[]
+
+  @@map("retreat_facilities")
+}
+
+// Room model for managing individual rooms within facilities
+model FacilityRoom {
+  id               String               @id @default(cuid())
+  facilityId       String
+  roomNumber       String
+  roomType         String               // e.g., "Single", "Double", "Suite"
+  status           RoomStatus           @default(AVAILABLE)
+  capacity         Int
+  currentOccupancy Int                  @default(0)
+  
+  // Room details
+  bedType          String?              // e.g., "Queen", "King", "Twin"
+  hasPrivateBath   Boolean              @default(false)
+  hasBalcony       Boolean              @default(false)
+  hasAC            Boolean              @default(false)
+  hasWifi          Boolean              @default(false)
+  
+  // Housekeeping
+  lastCleaned      DateTime?
+  cleaningStatus   CleaningStatus       @default(CLEAN)
+  housekeepingNotes String?
+  assignedHousekeeper String?
+  
+  // Maintenance
+  lastMaintenance  DateTime?
+  nextMaintenance  DateTime?
+  maintenanceNotes String?
+  
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  // Relations
+  facility         RetreatFacility      @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  bookings         RetreatBooking[]     @relation("RoomBookings")
+
+  @@unique([facilityId, roomNumber])
+  @@map("facility_rooms")
+}
+
+// Amenity model for managing facility amenities
+model FacilityAmenity {
+  id                String               @id @default(cuid())
+  facilityId        String
+  name              String
+  category          AmenityCategory
+  status            AmenityStatus        @default(AVAILABLE)
+  capacity          Int?
+  currentUsage      Int                  @default(0)
+  coordinator       String?
+  operatingHours    String?
+  
+  // Equipment tracking
+  equipmentCount    Int                  @default(0)
+  availableEquipment Int                 @default(0)
+  
+  // Scheduling
+  nextMaintenance   DateTime?
+  lastService       DateTime?
+  
+  // Performance
+  rating            Float                @default(0)
+  totalReviews      Int                  @default(0)
+  issueCount        Int                  @default(0)
+  
+  description       String?
+  features          String[]             // Array of features
+  image             String?
+  
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  // Relations
+  facility          RetreatFacility      @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  equipment         AmenityEquipment[]
+  bookings          AmenityBooking[]
+
+  @@map("facility_amenities")
+}
+
+// Equipment model for tracking amenity equipment
+model AmenityEquipment {
+  id              String               @id @default(cuid())
+  amenityId       String
+  name            String
+  quantity        Int
+  condition       EquipmentCondition   @default(GOOD)
+  lastService     DateTime?
+  nextService     DateTime?
+  purchaseDate    DateTime?
+  warrantyExpiry  DateTime?
+  notes           String?
+  
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  // Relations
+  amenity         FacilityAmenity      @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@map("amenity_equipment")
+}
+
+// Maintenance request model for facility maintenance
+model FacilityMaintenanceRequest {
+  id              String                    @id @default(cuid())
+  facilityId      String
+  title           String
+  description     String
+  priority        MaintenancePriority       @default(MEDIUM)
+  status          FacilityMaintenanceStatus @default(PENDING)
+  category        FacilityMaintenanceCategory @default(OTHER)
+  
+  // Assignment and tracking
+  assignedTo      String?
+  reportedBy      String
+  requestDate     DateTime                  @default(now())
+  scheduledDate   DateTime?
+  completedDate   DateTime?
+  
+  // Cost tracking
+  estimatedCost   Float?
+  actualCost      Float?
+  vendor          String?
+  
+  // Documentation
+  notes           String?
+  images          String[]                  // Array of image URLs
+  documents       String[]                  // Array of document URLs
+  
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  // Relations
+  facility        RetreatFacility           @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@map("facility_maintenance_requests")
+}
+
+// Facility booking model for event bookings
+model FacilityBooking {
+  id                String               @id @default(cuid())
+  facilityId        String
+  eventName         String
+  eventType         EventType
+  organizer         String
+  contactEmail      String
+  contactPhone      String?
+  
+  // Scheduling
+  startDate         DateTime
+  endDate           DateTime
+  startTime         String
+  endTime           String
+  
+  // Details
+  attendees         Int
+  status            FacilityBookingStatus @default(PENDING)
+  setupRequirements String[]             // Array of setup requirements
+  specialRequests   String?
+  
+  // Services
+  catering          Boolean              @default(false)
+  audioVisual       Boolean              @default(false)
+  parking           Int                  @default(0)
+  
+  // Cost and coordination
+  totalCost         Float?
+  coordinator       String?
+  
+  // Notes and tracking
+  notes             String[]             // Array of notes
+  confirmationSent  Boolean              @default(false)
+  
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  // Relations
+  facility          RetreatFacility      @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@map("facility_bookings")
+}
+
+// Amenity booking model for individual amenity bookings
+model AmenityBooking {
+  id              String               @id @default(cuid())
+  amenityId       String
+  guestName       String
+  guestContact    String?
+  bookingType     String               // e.g., "Spa Treatment", "Gym Session"
+  
+  // Scheduling
+  startTime       DateTime
+  endTime         DateTime
+  duration        Int                  // Duration in minutes
+  
+  status          AmenityBookingStatus @default(CONFIRMED)
+  notes           String?
+  
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  // Relations
+  amenity         FacilityAmenity      @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@map("amenity_bookings")
+}
+
+// ========================================
+// BRIDGE RETREATS FACILITY ENUMS
+// ========================================
+
+enum FacilityType {
+  ACCOMMODATION
+  DINING
+  WELLNESS
+  RECREATION
+  UTILITY
+  CONFERENCE
+}
+
+enum FacilityStatus {
+  OPERATIONAL
+  MAINTENANCE
+  CLOSED
+  RENOVATION
+  UNDER_CONSTRUCTION
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  OUT_OF_ORDER
+  RESERVED
+}
+
+enum CleaningStatus {
+  CLEAN
+  DIRTY
+  IN_PROGRESS
+  INSPECTED
+}
+
+enum AmenityCategory {
+  SPA
+  FITNESS
+  DINING
+  RECREATION
+  WELLNESS
+  UTILITY
+  CONFERENCE
+}
+
+enum AmenityStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  CLOSED
+  RESERVED
+}
+
+enum EquipmentCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  OUT_OF_ORDER
+}
+
+enum FacilityMaintenanceStatus {
+  PENDING
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  ON_HOLD
+}
+
+enum FacilityMaintenanceCategory {
+  PLUMBING
+  ELECTRICAL
+  HVAC
+  CLEANING
+  PAINTING
+  EQUIPMENT
+  LANDSCAPING
+  SECURITY
+  STRUCTURAL
+  OTHER
+}
+
+enum EventType {
+  CONFERENCE
+  WORKSHOP
+  WEDDING
+  MEETING
+  RETREAT
+  CELEBRATION
+  TRAINING
+  SEMINAR
+}
+
+enum FacilityBookingStatus {
+  PENDING
+  CONFIRMED
+  SETUP
+  ONGOING
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+enum AmenityBookingStatus {
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// ========================================
+// BRIDGE RETREATS FINANCIAL MODELS
+// ========================================
+
+// Financial transactions for retreat operations
+model RetreatFinancialTransaction {
+  id              String                    @id @default(cuid())
+  type            RetreatTransactionType
+  category        RetreatTransactionCategory
+  amount          Decimal                   @db.Decimal(10, 2)
+  description     String
+  transactionDate DateTime                  @default(now())
+  
+  // Related entities
+  bookingId       String?
+  facilityId      String?
+  retreatId       String?
+  vendorName      String?
+  
+  // Payment details
+  paymentMethod   String?
+  reference       String?                   // Invoice/receipt number
+  taxAmount       Decimal?                  @db.Decimal(10, 2)
+  
+  // Categorization
+  department      RetreatDepartment?
+  tags            String[]
+  
+  // Approval workflow
+  status          TransactionStatus         @default(PENDING)
+  approvedBy      String?
+  approvedAt      DateTime?
+  
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  // Relations
+  booking         RetreatBooking?           @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  facility        RetreatFacility?          @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+  retreat         Retreat?                  @relation(fields: [retreatId], references: [id], onDelete: SetNull)
+
+  @@map("retreat_financial_transactions")
+}
+
+// Budget planning and tracking
+model RetreatBudget {
+  id              String                    @id @default(cuid())
+  name            String                    // e.g., "Q1 2024 Budget"
+  period          String                    // e.g., "2024-Q1"
+  startDate       DateTime
+  endDate         DateTime
+  
+  // Budget categories
+  totalBudget     Decimal                   @db.Decimal(10, 2)
+  
+  status          BudgetStatus              @default(DRAFT)
+  
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  // Relations
+  items           RetreatBudgetItem[]
+
+  @@map("retreat_budgets")
+}
+
+// Individual budget line items
+model RetreatBudgetItem {
+  id              String                    @id @default(cuid())
+  budgetId        String
+  category        RetreatTransactionCategory
+  department      RetreatDepartment?
+  description     String
+  budgetedAmount  Decimal                   @db.Decimal(10, 2)
+  actualAmount    Decimal                   @default(0) @db.Decimal(10, 2)
+  
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  // Relations
+  budget          RetreatBudget             @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@map("retreat_budget_items")
+}
+
+// Simple budget model for the dashboard form
+model BridgeRetreatBudget {
+  id              String                    @id @default(cuid())
+  category        String                    // Category name (can be custom)
+  amount          Decimal                   @db.Decimal(10, 2)
+  actual          Decimal                   @default(0) @db.Decimal(10, 2)
+  description     String?
+  period          BudgetPeriod              @default(MONTHLY)
+  status          SimpleBudgetStatus        @default(ACTIVE)
+  companyId       String                    @default("default")
+  
+  // Computed fields for variance (calculated in application)
+  // variance = actual - amount
+  // variancePercent = (variance / amount) * 100
+  
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@unique([category, period, companyId, status])
+  @@map("bridge_retreat_budgets")
+}
+
+// Financial reports and analytics
+model RetreatFinancialReport {
+  id              String                    @id @default(cuid())
+  reportType      FinancialReportType
+  title           String
+  period          String                    // e.g., "2024-01"
+  startDate       DateTime
+  endDate         DateTime
+  
+  // Report data (JSON)
+  data            Json
+  
+  // Metadata
+  generatedBy     String
+  generatedAt     DateTime                  @default(now())
+  
+  createdAt       DateTime                  @default(now())
+
+  @@map("retreat_financial_reports")
+}
+
+// ========================================
+// BRIDGE RETREATS FINANCIAL ENUMS
+// ========================================
+
+enum RetreatTransactionType {
+  INCOME
+  EXPENSE
+  REFUND
+  TRANSFER
+}
+
+enum RetreatTransactionCategory {
+  // Income categories
+  RETREAT_BOOKING
+  FACILITY_RENTAL
+  AMENITY_USAGE
+  ADDON_SERVICES
+  CANCELLATION_FEE
+  
+  // Expense categories
+  STAFF_SALARIES
+  FACILITY_MAINTENANCE
+  UTILITIES
+  MARKETING
+  SUPPLIES
+  FOOD_BEVERAGE
+  EQUIPMENT
+  INSURANCE
+  PROFESSIONAL_SERVICES
+  TRAVEL_TRANSPORT
+  OTHER_INCOME
+  OTHER_EXPENSE
+}
+
+enum RetreatDepartment {
+  OPERATIONS
+  HOUSEKEEPING
+  FOOD_SERVICE
+  WELLNESS
+  ADMINISTRATION
+  MARKETING
+  MAINTENANCE
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSED
+}
+
+enum BudgetStatus {
+  DRAFT
+  APPROVED
+  ACTIVE
+  CLOSED
+}
+
+enum FinancialReportType {
+  PROFIT_LOSS
+  CASH_FLOW
+  BUDGET_VARIANCE
+  REVENUE_ANALYSIS
+  EXPENSE_ANALYSIS
+  MONTHLY_SUMMARY
+}
+
+enum BudgetPeriod {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum SimpleBudgetStatus {
+  ACTIVE
+  INACTIVE
+  COMPLETED
 }

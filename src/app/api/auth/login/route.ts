@@ -32,12 +32,12 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Generate JWT token
+    // Generate JWT token with appropriate expiration
     const token = generateToken({
       userId: user.id,
       email: user.email,
       role: user.role,
-    });
+    }, validatedData.keepLoggedIn || false);
     
     // Return user data and token
     return NextResponse.json({

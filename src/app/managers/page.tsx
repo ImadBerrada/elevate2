@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ImageUpload } from "@/components/ui/image-upload";
+import { RoleSelector } from "@/components/ui/role-selector";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { useSidebar } from "@/contexts/sidebar-context";
@@ -92,7 +93,7 @@ interface ManagerFormData {
   companyIds: string[]; // Changed to support multiple companies
   platforms: string[];
   department: string;
-  role: string;
+  role: string | string[]; // Updated to support multiple roles
   startDate: string;
   salary: string;
   actualSalary: string;
@@ -120,6 +121,21 @@ const availablePlatforms = [
   { id: 'Employee Management', name: 'Employee Management', description: 'HR operations and employee administration' },
   { id: 'Investor Relations', name: 'Investor Relations', description: 'Investor communications and relations' },
 ];
+
+// Helper functions for role handling
+const formatArrayField = (field: string | string[]) => {
+  if (Array.isArray(field)) {
+    return field.length > 0 ? field[0] : ''; // Use first item as primary
+  }
+  return field || '';
+};
+
+const parseArrayField = (field: string | string[]): string[] => {
+  if (Array.isArray(field)) {
+    return field;
+  }
+  return field ? field.split(',').map(s => s.trim()).filter(Boolean) : [];
+};
 
 export default function ManagersPage() {
   const { isOpen, isMobile, isTablet, isDesktop } = useSidebar();
@@ -155,7 +171,7 @@ export default function ManagersPage() {
     companyIds: [],
     platforms: [],
     department: "",
-    role: "",
+    role: [], // Initialize as empty array for multi-select
     startDate: "",
     salary: "",
     actualSalary: "",
@@ -281,7 +297,7 @@ export default function ManagersPage() {
             email: managerData.email,
             phone: managerData.phone,
             department: managerData.department,
-            role: managerData.role,
+            role: formatArrayField(managerData.role), // Convert array to string for API
             companyId: managerData.companyIds[0], // Use first company as primary
             actualCompanyId: managerData.companyIds[0],
             employerId: "",
@@ -323,7 +339,7 @@ export default function ManagersPage() {
         companyIds: [],
         platforms: [],
         department: "",
-        role: "",
+        role: [],
         startDate: "",
         salary: "",
         actualSalary: "",
@@ -437,6 +453,24 @@ export default function ManagersPage() {
 
   const handleEditManager = (manager: Manager) => {
     setSelectedManager(manager);
+    
+    // Collect all unique platforms from all assignments
+    const allPlatforms: string[] = [];
+    if (manager.managerAssignments && manager.managerAssignments.length > 0) {
+      manager.managerAssignments.forEach(assignment => {
+        if (assignment.platforms && Array.isArray(assignment.platforms)) {
+          assignment.platforms.forEach(platform => {
+            if (!allPlatforms.includes(platform)) {
+              allPlatforms.push(platform);
+            }
+          });
+        }
+      });
+    }
+    
+    // Get permissions from the first assignment (they should be consistent across assignments)
+    const firstAssignment = manager.managerAssignments && manager.managerAssignments.length > 0 ? manager.managerAssignments[0] : null;
+    
     setManagerData({
       firstName: manager.firstName,
       lastName: manager.lastName,
@@ -444,7 +478,7 @@ export default function ManagersPage() {
       phone: '', // Manager interface doesn't have phone, set empty
       password: '', // Don't populate password for security
       companyIds: (manager.managerAssignments || []).map(assignment => assignment.companyId),
-      platforms: (manager.managerAssignments && manager.managerAssignments.length > 0) ? manager.managerAssignments[0].platforms : [],
+      platforms: allPlatforms, // Use all unique platforms instead of just first assignment
       department: '', // Manager interface doesn't have department, set empty
       role: manager.role || '',
       startDate: manager.createdAt ? manager.createdAt.split('T')[0] : '',
@@ -455,10 +489,10 @@ export default function ManagersPage() {
       skills: '',
       avatar: manager.avatar || '',
       permissions: {
-        canManageAssets: (manager.managerAssignments && manager.managerAssignments.length > 0) ? manager.managerAssignments[0].permissions?.canManageAssets || false : false,
-        canModifyCompanies: (manager.managerAssignments && manager.managerAssignments.length > 0) ? manager.managerAssignments[0].permissions?.canModifyCompanies || false : false,
-        canCreateCompanies: (manager.managerAssignments && manager.managerAssignments.length > 0) ? manager.managerAssignments[0].permissions?.canCreateCompanies || false : false,
-        canDeleteCompanies: (manager.managerAssignments && manager.managerAssignments.length > 0) ? manager.managerAssignments[0].permissions?.canDeleteCompanies || false : false,
+        canManageAssets: firstAssignment?.permissions?.canManageAssets || false,
+        canModifyCompanies: firstAssignment?.permissions?.canModifyCompanies || false,
+        canCreateCompanies: firstAssignment?.permissions?.canCreateCompanies || false,
+        canDeleteCompanies: firstAssignment?.permissions?.canDeleteCompanies || false,
       },
     });
     setIsEditManagerOpen(true);
@@ -485,6 +519,14 @@ export default function ManagersPage() {
         platforms: managerData.platforms,
       });
 
+      console.log('=== MANAGER UPDATE DEBUG ===');
+      console.log('Manager ID:', selectedManager.id);
+      console.log('Form data - Companies:', managerData.companyIds);
+      console.log('Form data - Platforms:', managerData.platforms);
+      console.log('Form data - Permissions:', managerData.permissions);
+      console.log('Current assignments:', selectedManager.managerAssignments);
+      console.log('==============================');
+
       // Update manager (assuming managers are users)
       const updatedManager = await apiClient.updateUser(selectedManager.id, {
         firstName: managerData.firstName,
@@ -507,9 +549,13 @@ export default function ManagersPage() {
       
       // Find assignments to add
       const assignmentsToAdd = newCompanyIds.filter(companyId => !currentCompanyIds.includes(companyId));
+      
+      // Find assignments to update (existing assignments that remain)
+      const assignmentsToUpdate = currentCompanyIds.filter(companyId => newCompanyIds.includes(companyId));
 
       console.log('Assignments to remove:', assignmentsToRemove);
       console.log('Assignments to add:', assignmentsToAdd);
+      console.log('Assignments to update:', assignmentsToUpdate);
 
       // Remove old assignments
       for (const companyId of assignmentsToRemove) {
@@ -521,6 +567,28 @@ export default function ManagersPage() {
           console.log(`Removed assignment for company ${companyId}`);
         } catch (assignmentErr) {
           console.error(`Failed to remove assignment for company ${companyId}:`, assignmentErr);
+        }
+      }
+
+      // Update existing assignments with new platforms and permissions
+      for (const companyId of assignmentsToUpdate) {
+        try {
+          // Use the more efficient update method instead of delete-and-recreate
+          await apiClient.updateManagerAssignment({
+            userId: selectedManager.id,
+            companyId: companyId,
+            platforms: managerData.platforms.length > 0 ? managerData.platforms : ['Employee Management'],
+            permissions: {
+              ...generatePermissions(managerData.platforms.length > 0 ? managerData.platforms : ['Employee Management']),
+              canManageAssets: managerData.permissions.canManageAssets,
+              canModifyCompanies: managerData.permissions.canModifyCompanies,
+              canCreateCompanies: managerData.permissions.canCreateCompanies,
+              canDeleteCompanies: managerData.permissions.canDeleteCompanies,
+            }
+          });
+          console.log(`Updated assignment for company ${companyId} with new platforms:`, managerData.platforms);
+        } catch (assignmentErr) {
+          console.error(`Failed to update assignment for company ${companyId}:`, assignmentErr);
         }
       }
 
@@ -548,8 +616,28 @@ export default function ManagersPage() {
       // Update local state (refresh from server to get latest assignments)
       await fetchManagers();
       
-      if (assignmentsToRemove.length > 0 || assignmentsToAdd.length > 0) {
-        setSuccess(`Manager updated successfully! ${assignmentsToAdd.length > 0 ? `Added ${assignmentsToAdd.length} company assignment(s). ` : ''}${assignmentsToRemove.length > 0 ? `Removed ${assignmentsToRemove.length} company assignment(s).` : ''}`);
+      // Verify the updates were successful
+      console.log('=== VERIFICATION ===');
+      const updatedManagerFromServer = managers.find(m => m.id === selectedManager.id);
+      if (updatedManagerFromServer) {
+        console.log('Updated manager assignments from server:', updatedManagerFromServer.managerAssignments);
+        updatedManagerFromServer.managerAssignments.forEach((assignment, index) => {
+          console.log(`Assignment ${index + 1}:`, {
+            company: assignment.company.name,
+            platforms: assignment.platforms,
+            permissions: assignment.permissions
+          });
+        });
+      }
+      console.log('===================');
+      
+      if (assignmentsToRemove.length > 0 || assignmentsToAdd.length > 0 || assignmentsToUpdate.length > 0) {
+        const messages = [];
+        if (assignmentsToAdd.length > 0) messages.push(`Added ${assignmentsToAdd.length} company assignment(s)`);
+        if (assignmentsToRemove.length > 0) messages.push(`Removed ${assignmentsToRemove.length} company assignment(s)`);
+        if (assignmentsToUpdate.length > 0) messages.push(`Updated ${assignmentsToUpdate.length} existing assignment(s) with new platforms`);
+        
+        setSuccess(`Manager updated successfully! ${messages.join('. ')}.`);
       } else {
         setSuccess('Manager updated successfully!');
       }
@@ -568,7 +656,7 @@ export default function ManagersPage() {
         companyIds: [],
         platforms: [],
         department: "",
-        role: "",
+        role: [], // Initialize as empty array for multi-select
         startDate: "",
         salary: "",
         actualSalary: "",
@@ -1261,30 +1349,14 @@ export default function ManagersPage() {
 
                         {/* Role/Function */}
                         <div className="space-y-2">
-                          <Label htmlFor="role" className="text-sm font-medium flex items-center space-x-2">
-                            <Briefcase className="w-4 h-4" />
-                            <span>Role/Function *</span>
-                          </Label>
-                          <Select value={managerData.role} onValueChange={(value) => setManagerData(prev => ({ ...prev, role: value }))} required>
-                            <SelectTrigger className="border-refined">
-                              <SelectValue placeholder="Select manager role..." />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-60">
-                              <div className="px-2 py-1">
-                                <div className="text-xs font-medium text-muted-foreground mb-1">Management Roles</div>
-                                <SelectItem value="MANAGER">Manager</SelectItem>
-                                <SelectItem value="SENIOR_MANAGER">Senior Manager</SelectItem>
-                                <SelectItem value="DEPARTMENT_HEAD">Department Head</SelectItem>
-                                <SelectItem value="TEAM_LEAD">Team Lead</SelectItem>
-                                <SelectItem value="PROJECT_MANAGER">Project Manager</SelectItem>
-                                <SelectItem value="OPERATIONS_MANAGER">Operations Manager</SelectItem>
-                                <SelectItem value="GENERAL_MANAGER">General Manager</SelectItem>
-                                <SelectItem value="REGIONAL_MANAGER">Regional Manager</SelectItem>
-                                <SelectItem value="AREA_MANAGER">Area Manager</SelectItem>
-                                <SelectItem value="BRANCH_MANAGER">Branch Manager</SelectItem>
-                              </div>
-                            </SelectContent>
-                          </Select>
+                          <RoleSelector
+                            value={managerData.role}
+                            onChange={(value) => setManagerData(prev => ({ ...prev, role: value }))}
+                            label="Role/Function"
+                            placeholder="Select manager roles..."
+                            required
+                            multi={true}
+                          />
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

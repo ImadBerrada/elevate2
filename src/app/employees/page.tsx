@@ -47,6 +47,8 @@ import { ImageUpload } from "@/components/ui/image-upload";
 import { IdCardFiller } from "@/components/ui/id-card-filler";
 import { VisaScanner } from "@/components/ui/visa-scanner";
 import { IdScanner } from "@/components/ui/id-scanner";
+import { RoleSelector } from "@/components/ui/role-selector";
+import { DepartmentSelector } from "@/components/ui/department-selector";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -62,8 +64,8 @@ interface Employee {
   lastNameArabic?: string;
   email: string;
   phone?: string;
-  position: string;
-  department: string;
+  position: string | string[]; // Updated to support multiple positions
+  department: string | string[]; // Updated to support multiple departments
   companyId: string;
   companyName: string;
   actualCompanyId?: string;
@@ -125,8 +127,8 @@ interface EmployeeFormData {
   lastNameArabic?: string;
   email: string;
   phone: string;
-  department: string;
-  role: string;
+  department: string | string[];
+  role: string | string[];
   companyId: string;
   actualCompanyId: string;
   employerId: string;
@@ -157,6 +159,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [employers, setEmployers] = useState<Employer[]>([]);
+  const [managers, setManagers] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [companyFilter, setCompanyFilter] = useState("ALL");
@@ -192,7 +195,7 @@ export default function EmployeesPage() {
     startDate: "",
     status: "ACTIVE",
     location: "",
-    manager: "",
+    manager: "none",
     skills: "",
     avatar: "",
     // ID Information
@@ -208,6 +211,7 @@ export default function EmployeesPage() {
     licenseDocument: "",
     vehicleRegistration: ""
   });
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchEmployees();
@@ -222,6 +226,63 @@ export default function EmployeesPage() {
 
     return () => clearTimeout(delayedSearch);
   }, [searchTerm, companyFilter, departmentFilter, statusFilter]);
+
+  // Fetch managers when company changes
+  useEffect(() => {
+    if (employeeData.companyId) {
+      fetchManagers(employeeData.companyId);
+    }
+  }, [employeeData.companyId]);
+
+  // Helper functions (moved before usage)
+  const parseArrayField = (field: string | string[]): string[] => {
+    if (Array.isArray(field)) {
+      return field;
+    }
+    if (typeof field === 'string' && field.trim()) {
+      // Handle comma-separated strings from database
+      return field.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  // Helper function to check if role includes driver
+  const hasDriverRole = (role: string | string[]) => {
+    const roles = Array.isArray(role) ? role : [role];
+    return roles.some(r => r === 'DRIVER' || r.toLowerCase().includes('driver'));
+  };
+
+  // Helper function to format roles/departments for API
+  const formatArrayField = (field: string | string[]) => {
+    if (Array.isArray(field)) {
+      return field.length > 0 ? field[0] : ''; // Use first item as primary
+    }
+    return field || '';
+  };
+
+  // Helper function to render multiple values as badges
+  const renderMultipleBadges = (values: string | string[], variant: "default" | "secondary" | "outline" = "secondary") => {
+    const arrayValues = parseArrayField(values);
+    if (arrayValues.length === 0) return null;
+    
+    return (
+      <div className="flex flex-wrap gap-1">
+        {arrayValues.map((value, index) => (
+          <Badge key={index} variant={variant} className="text-xs">
+            {value}
+          </Badge>
+        ))}
+      </div>
+    );
+  };
+
+  // Helper function to get display text for single or multiple values
+  const getDisplayText = (values: string | string[]): string => {
+    const arrayValues = parseArrayField(values);
+    if (arrayValues.length === 0) return '';
+    if (arrayValues.length === 1) return arrayValues[0];
+    return `${arrayValues[0]} (+${arrayValues.length - 1} more)`;
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -262,6 +323,56 @@ export default function EmployeesPage() {
     }
   };
 
+  const fetchManagers = async (companyId: string) => {
+    if (!companyId) {
+      setManagers([]);
+      return;
+    }
+
+    try {
+      const params = {
+        limit: 1000,
+        companyId: companyId,
+      };
+
+      const data = await apiClient.getEmployees(params);
+      
+      // Filter employees who have manager-like positions
+      const managerEmployees = (data.employees || []).filter(emp => {
+        // Handle both string and array types for position
+        const positions = parseArrayField(emp.position);
+        return positions.some(position => {
+          const lowerPos = position.toLowerCase().trim();
+          // More comprehensive list of management/leadership positions
+          return lowerPos.includes('manager') || 
+                 lowerPos.includes('supervisor') ||
+                 lowerPos.includes('director') ||
+                 lowerPos.includes('head') ||
+                 lowerPos.includes('lead') ||
+                 lowerPos.includes('chief') ||
+                 lowerPos.includes('ceo') ||
+                 lowerPos.includes('cto') ||
+                 lowerPos.includes('cfo') ||
+                 lowerPos.includes('coo') ||
+                 lowerPos.includes('team lead') ||
+                 lowerPos.includes('team leader') ||
+                 lowerPos.includes('project manager') ||
+                 lowerPos.includes('department head') ||
+                 lowerPos.includes('senior') ||
+                 lowerPos.includes('principal') ||
+                 lowerPos.includes('coordinator') ||
+                 lowerPos.includes('administrator') ||
+                 lowerPos === 'admin' ||
+                 lowerPos === 'owner';
+        });
+      });
+      setManagers(managerEmployees);
+    } catch (err) {
+      console.error('Failed to fetch managers:', err);
+      setManagers([]);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'ACTIVE': return 'bg-green-100 text-green-800';
@@ -290,396 +401,165 @@ export default function EmployeesPage() {
     }
   };
 
+  const validateEmployeeData = (data: EmployeeFormData): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    
+    // Basic required fields
+    if (!data.firstName?.trim()) {
+      errors.firstName = 'First name is required';
+    }
+    if (!data.lastName?.trim()) {
+      errors.lastName = 'Last name is required';
+    }
+    if (!data.email?.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
+      errors.email = 'Please enter a valid email address';
+    }
+    if (!data.phone?.trim()) {
+      errors.phone = 'Phone number is required';
+    }
+    if (!data.companyId?.trim()) {
+      errors.companyId = 'Company selection is required';
+    }
+    if (!data.startDate?.trim()) {
+      errors.startDate = 'Start date is required';
+    }
+    
+    // Check departments array
+    const departments = parseArrayField(data.department);
+    if (departments.length === 0) {
+      errors.department = 'At least one department is required';
+    }
+    
+    // Check roles array
+    const roles = parseArrayField(data.role);
+    if (roles.length === 0) {
+      errors.role = 'At least one role is required';
+    }
+    
+    // Driver-specific validation
+    if (hasDriverRole(data.role)) {
+      const isMarahCompany = companies.find(company => 
+        company.id === data.companyId && 
+        company.name === 'MARAH Inflatable Games Rental'
+      );
+      
+      if (isMarahCompany && !data.phone?.trim()) {
+        errors.phone = 'Phone number is required for MARAH drivers';
+      }
+    }
+    
+    return errors;
+  };
+
   const handleCreateEmployee = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-
-    // Client-side validation
-    if (!employeeData.firstName.trim()) {
-      setError('First name is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.lastName.trim()) {
-      setError('Last name is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.email.trim()) {
-      setError('Email is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.department.trim()) {
-      setError('Department is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.role.trim()) {
-      setError('Role selection is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.companyId.trim()) {
-      setError('Company selection is required');
-      setSubmitting(false);
-      return;
-    }
-
-    // Additional validation for driver role
-    const isDriverRole = employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver');
-    const isMarahCompany = companies.find(company => 
-      company.id === employeeData.companyId && 
-      company.name === 'MARAH Inflatable Games Rental'
-    );
-
-    if (isDriverRole && isMarahCompany) {
-      if (!employeeData.phone.trim()) {
-        setError('Phone number is required for drivers in MARAH company');
-        setSubmitting(false);
-        return;
-      }
-    }
+    setValidationErrors({});
 
     try {
-      // Create employee payload without driver-specific fields and employerId
-      const {
-        licenseNumber,
-        vehicleInfo,
-        dateOfBirth,
-        emergencyContact,
-        emergencyPhone,
-        experience,
-        licenseDocument,
-        vehicleRegistration,
-        employerId,
-        ...employeeFields
-      } = employeeData;
-
-      const payload = {
-        ...employeeFields,
-        actualCompanyId: (employeeData.actualCompanyId === "SAME_AS_OFFICIAL" || !employeeData.actualCompanyId?.trim()) ? undefined : employeeData.actualCompanyId,
-        startDate: employeeData.startDate || new Date().toISOString().split('T')[0],
-        avatar: employeeData.avatar || undefined,
-        // Convert skills string to array
-        skills: employeeData.skills ? employeeData.skills.split(',').map(skill => skill.trim()).filter(Boolean) : [],
-      };
-
-      console.log('Creating employee with payload:', payload);
-      const newEmployee = await apiClient.createEmployee(payload);
-      
-      // If visa data exists, save it for the new employee
-      if (visaData && newEmployee.id) {
-        try {
-          await apiClient.createOrUpdateEmployeeVisa(newEmployee.id, visaData);
-        } catch (visaErr) {
-          console.error('Failed to save visa data:', visaErr);
-          // Don't fail the entire operation if visa save fails
-        }
+      // Validate form data
+      const errors = validateEmployeeData(employeeData);
+      if (Object.keys(errors).length > 0) {
+        setValidationErrors(errors);
+        setError('Please fix the highlighted errors before submitting');
+        return;
       }
 
-      // Auto-create driver if employee is assigned to MARAH and has a driver role
-      await handleAutoCreateDriver(newEmployee, employeeData);
+      // Prepare the API payload
+      const selectedRoles = Array.isArray(employeeData.role) ? employeeData.role : [employeeData.role].filter(Boolean);
+      const selectedDepartments = Array.isArray(employeeData.department) ? employeeData.department : [employeeData.department].filter(Boolean);
+      const primaryRole = selectedRoles.length > 0 ? selectedRoles[0] : 'EMPLOYEE';
+      const primaryDepartment = selectedDepartments.length > 0 ? selectedDepartments[0] : '';
       
-      setEmployees(prev => [...prev, newEmployee]);
+      const payload = {
+        firstName: employeeData.firstName.trim(),
+        lastName: employeeData.lastName.trim(),
+        firstNameArabic: employeeData.firstNameArabic?.trim() || "",
+        lastNameArabic: employeeData.lastNameArabic?.trim() || "",
+        email: employeeData.email.trim(),
+        phone: employeeData.phone.trim(),
+        role: selectedRoles.join(', '), // Send all roles as comma-separated string
+        department: selectedDepartments.join(', '), // Send all departments as comma-separated string
+        companyId: employeeData.companyId.trim(),
+        actualCompanyId: employeeData.actualCompanyId === "SAME_AS_OFFICIAL" ? employeeData.companyId : (employeeData.actualCompanyId || ""),
+        salary: employeeData.salary?.trim() || "",
+        actualSalary: employeeData.actualSalary?.trim() || "",
+        startDate: employeeData.startDate,
+        status: employeeData.status,
+        location: employeeData.location?.trim() || "",
+        manager: employeeData.manager === "none" ? "" : (employeeData.manager?.trim() || ""),
+        skills: employeeData.skills ? employeeData.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
+        avatar: employeeData.avatar?.trim() || "",
+        userId: localStorage.getItem('userId') || '',
+      };
+
+      const response = await fetch('/api/employees', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API Error:', errorData);
+        throw new Error(errorData.error || 'Failed to create employee');
+      }
+
+      const newEmployee = await response.json();
+      
+      // Auto-create driver if role includes driver
+      if (hasDriverRole(employeeData.role)) {
+        await handleAutoCreateDriver(newEmployee, employeeData);
+      }
+
+      // Reset form
+      setEmployeeData({
+        firstName: "",
+        lastName: "",
+        firstNameArabic: "",
+        lastNameArabic: "",
+        email: "",
+        phone: "",
+        department: "",
+        role: "",
+        companyId: "",
+        actualCompanyId: "",
+        employerId: "none",
+        salary: "",
+        actualSalary: "",
+        startDate: "",
+        status: "ACTIVE",
+        location: "",
+        manager: "none",
+        skills: "",
+        avatar: "",
+        // ID Information
+        employeeId: "",
+        emiratesId: "",
+        // Driver-specific fields
+        licenseNumber: "",
+        vehicleInfo: "",
+        dateOfBirth: "",
+        emergencyContact: "",
+        emergencyPhone: "",
+        experience: "",
+        licenseDocument: "",
+        vehicleRegistration: ""
+      });
+      setValidationErrors({});
+      setVisaData(null);
+      setIdData(null);
       setIsAddEmployeeOpen(false);
-      
-      // Reset form and visa data
-      setEmployeeData({
-        firstName: "",
-        lastName: "",
-        firstNameArabic: "",
-        lastNameArabic: "",
-        email: "",
-        phone: "",
-        department: "",
-        role: "",
-        companyId: "",
-        actualCompanyId: "",
-        employerId: "none",
-        salary: "",
-        actualSalary: "",
-        startDate: "",
-        status: "ACTIVE",
-        location: "",
-        manager: "",
-        skills: "",
-        avatar: "",
-        // ID Information
-        employeeId: "",
-        emiratesId: "",
-        // Driver-specific fields
-        licenseNumber: "",
-        vehicleInfo: "",
-        dateOfBirth: "",
-        emergencyContact: "",
-        emergencyPhone: "",
-        experience: "",
-        licenseDocument: "",
-        vehicleRegistration: ""
-      });
-      setVisaData(null);
-      setIdData(null);
+      fetchEmployees();
     } catch (err) {
+      console.error('Error creating employee:', err);
       setError(err instanceof Error ? err.message : 'Failed to create employee');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleAutoCreateDriver = async (employee: any, employeeData: EmployeeFormData) => {
-    try {
-      // Check if employee is assigned to MARAH company and has a driver role
-      const isMarahEmployee = companies.find(company => 
-        company.id === employeeData.companyId && 
-        company.name === 'MARAH Inflatable Games Rental'
-      );
-      
-      const isDriverRole = employeeData.role === 'DRIVER' || 
-                          employeeData.role.toLowerCase().includes('driver');
-      
-      if (isMarahEmployee && isDriverRole) {
-        console.log('Creating driver for MARAH employee:', employee.firstName, employee.lastName);
-        
-        // Validate required fields for driver creation
-        if (!employeeData.phone?.trim()) {
-          console.error('Cannot create driver: Phone number is required');
-          setError('Phone number is required for driver creation');
-          return;
-        }
-        
-        // Create driver in MARAH system with only driver-specific fields
-        const driverPayload = {
-          name: `${employee.firstName} ${employee.lastName}`,
-          phone: employeeData.phone.trim(),
-          email: employeeData.email.trim(),
-          licenseNumber: employeeData.licenseNumber?.trim() || undefined,
-          vehicleInfo: employeeData.vehicleInfo?.trim() || undefined,
-          vehicleRegistration: employeeData.vehicleRegistration?.trim() || undefined,
-          status: 'ACTIVE' as const,
-          profilePicture: employeeData.avatar?.trim() || undefined,
-          dateOfBirth: employeeData.dateOfBirth?.trim() || undefined,
-          address: employeeData.location?.trim() || undefined,
-          emergencyContact: employeeData.emergencyContact?.trim() || undefined,
-          emergencyPhone: employeeData.emergencyPhone?.trim() || undefined,
-          experience: employeeData.experience?.trim() || undefined,
-          licenseDocument: employeeData.licenseDocument?.trim() || undefined,
-          salary: employeeData.salary ? parseFloat(employeeData.salary.replace(/[^0-9.]/g, '')) : undefined,
-          companyId: employeeData.companyId,
-        };
-
-        // Remove undefined values to avoid API validation issues
-        const cleanPayload = Object.fromEntries(
-          Object.entries(driverPayload).filter(([_, value]) => value !== undefined)
-        );
-
-        console.log('Driver payload:', cleanPayload);
-
-        const response = await fetch('/api/marah/drivers', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          },
-          body: JSON.stringify(cleanPayload),
-        });
-
-        if (response.ok) {
-          const createdDriver = await response.json();
-          console.log('Driver created successfully for employee:', employee.firstName, employee.lastName, createdDriver);
-        } else {
-          const errorData = await response.json();
-          console.error('Failed to create driver:', errorData);
-          
-          // Show specific error messages to user
-          if (errorData.error?.includes('Phone number already exists')) {
-            setError(`Driver creation failed: Phone number ${employeeData.phone} is already registered as a driver`);
-          } else if (errorData.details) {
-            const validationErrors = errorData.details.map((err: any) => err.message).join(', ');
-            setError(`Driver creation failed: ${validationErrors}`);
-          } else {
-            setError(`Driver creation failed: ${errorData.error || 'Unknown error'}`);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error in auto-create driver:', error);
-      setError('Failed to create driver record. Employee was created successfully.');
-    }
-  };
-
-  const handleEditEmployee = (employee: Employee) => {
-    setSelectedEmployee(employee);
-    setEmployeeData({
-      firstName: employee.firstName,
-      lastName: employee.lastName,
-      firstNameArabic: employee.firstNameArabic || "",
-      lastNameArabic: employee.lastNameArabic || "",
-      email: employee.email,
-      phone: employee.phone || "",
-      department: employee.department,
-      role: (employee as any).role || "",
-      companyId: employee.companyId,
-      actualCompanyId: employee.actualCompanyId || "SAME_AS_OFFICIAL",
-      employerId: (employee as any).employerId || "none",
-      salary: employee.salary || "",
-      actualSalary: employee.actualSalary || "",
-      startDate: employee.startDate.split('T')[0], // Format for date input
-      status: employee.status,
-      location: employee.location || "",
-      manager: employee.manager || "",
-      skills: employee.skills?.join(', ') || "",
-      avatar: employee.avatar || "",
-      // ID Information
-      employeeId: (employee as any).employeeId || "",
-      emiratesId: employee.visa?.emiratesId || "",
-      // Driver-specific fields
-      licenseNumber: (employee as any).licenseNumber || "",
-      vehicleInfo: (employee as any).vehicleInfo || "",
-      dateOfBirth: (employee as any).dateOfBirth || "",
-      emergencyContact: (employee as any).emergencyContact || "",
-      emergencyPhone: (employee as any).emergencyPhone || "",
-      experience: (employee as any).experience || "",
-      licenseDocument: (employee as any).licenseDocument || "",
-      vehicleRegistration: (employee as any).vehicleRegistration || ""
-    });
-    setIsEditEmployeeOpen(true);
-  };
-
-  const handleUpdateEmployee = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!selectedEmployee) return;
-
-    setSubmitting(true);
-    setError(null);
-
-    // Client-side validation
-    if (!employeeData.firstName.trim()) {
-      setError('First name is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.lastName.trim()) {
-      setError('Last name is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.email.trim()) {
-      setError('Email is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.department.trim()) {
-      setError('Department is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.role.trim()) {
-      setError('Role selection is required');
-      setSubmitting(false);
-      return;
-    }
-    if (!employeeData.companyId.trim()) {
-      setError('Company selection is required');
-      setSubmitting(false);
-      return;
-    }
-
-    // Additional validation for driver role
-    const isDriverRole = employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver');
-    const isMarahCompany = companies.find(company => 
-      company.id === employeeData.companyId && 
-      company.name === 'MARAH Inflatable Games Rental'
-    );
-
-    if (isDriverRole && isMarahCompany) {
-      if (!employeeData.phone.trim()) {
-        setError('Phone number is required for drivers in MARAH company');
-        setSubmitting(false);
-        return;
-      }
-    }
-
-    try {
-      // Create employee payload without driver-specific fields and employerId
-      const {
-        licenseNumber,
-        vehicleInfo,
-        dateOfBirth,
-        emergencyContact,
-        emergencyPhone,
-        experience,
-        licenseDocument,
-        vehicleRegistration,
-        employerId,
-        ...employeeFields
-      } = employeeData;
-
-      const payload = {
-        ...employeeFields,
-        actualCompanyId: (employeeData.actualCompanyId === "SAME_AS_OFFICIAL" || !employeeData.actualCompanyId?.trim()) ? undefined : employeeData.actualCompanyId,
-        startDate: employeeData.startDate || selectedEmployee.startDate,
-        avatar: employeeData.avatar || undefined,
-        // Convert skills string to array
-        skills: employeeData.skills ? employeeData.skills.split(',').map(skill => skill.trim()).filter(Boolean) : [],
-      };
-
-      console.log('Updating employee with payload:', payload);
-      const updatedEmployee = await apiClient.updateEmployee(selectedEmployee.id, payload);
-      
-      // If visa data exists, save it for the employee
-      if (visaData && selectedEmployee.id) {
-        try {
-          await apiClient.createOrUpdateEmployeeVisa(selectedEmployee.id, visaData);
-        } catch (visaErr) {
-          console.error('Failed to save visa data:', visaErr);
-          // Don't fail the entire operation if visa save fails
-        }
-      }
-      
-      setEmployees(prev => prev.map(emp => emp.id === selectedEmployee.id ? updatedEmployee : emp));
-      setIsEditEmployeeOpen(false);
-      setSelectedEmployee(null);
-      
-      // Reset form and visa data
-      setEmployeeData({
-        firstName: "",
-        lastName: "",
-        firstNameArabic: "",
-        lastNameArabic: "",
-        email: "",
-        phone: "",
-        department: "",
-        role: "",
-        companyId: "",
-        actualCompanyId: "",
-        employerId: "none",
-        salary: "",
-        actualSalary: "",
-        startDate: "",
-        status: "ACTIVE",
-        location: "",
-        manager: "",
-        skills: "",
-        avatar: "",
-        // ID Information
-        employeeId: "",
-        emiratesId: "",
-        // Driver-specific fields
-        licenseNumber: "",
-        vehicleInfo: "",
-        dateOfBirth: "",
-        emergencyContact: "",
-        emergencyPhone: "",
-        experience: "",
-        licenseDocument: "",
-        vehicleRegistration: ""
-      });
-      setVisaData(null);
-      setIdData(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update employee');
     } finally {
       setSubmitting(false);
     }
@@ -856,7 +736,198 @@ export default function EmployeesPage() {
 
   const filteredEmployees = employees;
 
-  const uniqueDepartments = [...new Set(employees.map(e => e.department))];
+  // Get unique departments for filtering, flattening arrays
+  const uniqueDepartments = [...new Set(
+    employees.flatMap(e => parseArrayField(e.department))
+  )].filter(Boolean);
+
+
+
+  const handleAutoCreateDriver = async (employee: any, employeeData: EmployeeFormData) => {
+    try {
+      // Check if employee has driver role and is assigned to a company
+      const hasDriver = hasDriverRole(employeeData.role);
+      
+      if (hasDriver && employeeData.companyId) {
+        console.log('Creating driver for employee:', employee.firstName, employee.lastName);
+        
+        // Validate required fields for driver creation
+        if (!employeeData.phone?.trim()) {
+          console.error('Cannot create driver: Phone number is required');
+          setError('Phone number is required for driver creation');
+          return;
+        }
+        
+        // Create driver payload
+        const driverPayload = {
+          name: `${employee.firstName} ${employee.lastName}`,
+          phone: employeeData.phone.trim(),
+          email: employeeData.email.trim(),
+          licenseNumber: employeeData.licenseNumber?.trim() || undefined,
+          vehicleInfo: employeeData.vehicleInfo?.trim() || undefined,
+          vehicleRegistration: employeeData.vehicleRegistration?.trim() || undefined,
+          status: 'ACTIVE' as const,
+          dateOfBirth: employeeData.dateOfBirth?.trim() || undefined,
+          emergencyContact: employeeData.emergencyContact?.trim() || undefined,
+          emergencyPhone: employeeData.emergencyPhone?.trim() || undefined,
+          experience: employeeData.experience?.trim() || undefined,
+          licenseDocument: employeeData.licenseDocument?.trim() || undefined,
+          salary: employeeData.salary ? parseFloat(employeeData.salary.replace(/[^0-9.]/g, '')) : undefined,
+          companyId: employeeData.companyId,
+          // Employee fields for driver creation - ensure proper data types
+          department: Array.isArray(employeeData.department) 
+            ? (employeeData.department[0] || 'Operations') 
+            : (employeeData.department || 'Operations'),
+          startDate: employeeData.startDate,
+          role: Array.isArray(employeeData.role) 
+            ? (employeeData.role[0] || 'DRIVER') 
+            : (employeeData.role || 'DRIVER'),
+          employerId: employeeData.employerId !== 'none' ? employeeData.employerId : undefined,
+          actualSalary: employeeData.actualSalary?.trim() || undefined,
+          location: employeeData.location?.trim() || undefined,
+          manager: employeeData.manager === "none" ? undefined : employeeData.manager?.trim() || undefined,
+          skills: employeeData.skills ? employeeData.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
+          employeeStatus: employeeData.status || 'ACTIVE',
+        };
+
+        // Remove undefined values
+        const cleanPayload = Object.fromEntries(
+          Object.entries(driverPayload).filter(([_, value]) => value !== undefined)
+        );
+
+        // Debug logging
+        console.log('=== DRIVER CREATION DEBUG ===');
+        console.log('Original employeeData.department:', employeeData.department);
+        console.log('Original employeeData.role:', employeeData.role);
+        console.log('Clean payload being sent:', cleanPayload);
+        console.log('================================');
+
+        const response = await fetch('/api/marah/drivers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          },
+          body: JSON.stringify(cleanPayload),
+        });
+
+        if (response.ok) {
+          console.log('Driver created successfully');
+        } else {
+          const errorData = await response.json();
+          console.error('Failed to create driver:', errorData.error);
+          console.error('Error details:', errorData.details || 'No additional details');
+          console.error('Payload sent:', cleanPayload);
+        }
+      }
+    } catch (error) {
+      console.error('Error in auto-create driver:', error);
+    }
+  };
+
+  const handleEditEmployee = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setEmployeeData({
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      firstNameArabic: employee.firstNameArabic || "",
+      lastNameArabic: employee.lastNameArabic || "",
+      email: employee.email,
+      phone: employee.phone || "",
+      department: employee.department || "",
+      role: employee.position || "",
+      companyId: employee.companyId,
+      actualCompanyId: employee.actualCompanyId || "",
+      employerId: "none",
+      salary: employee.salary || "",
+      actualSalary: employee.actualSalary || "",
+      startDate: employee.startDate.split('T')[0],
+      status: employee.status,
+      location: employee.location || "",
+      manager: employee.manager?.trim() || "none",
+      skills: employee.skills ? employee.skills.join(', ') : "",
+      avatar: employee.avatar || "",
+      employeeId: "",
+      emiratesId: "",
+      licenseNumber: "",
+      vehicleInfo: "",
+      dateOfBirth: "",
+      emergencyContact: "",
+      emergencyPhone: "",
+      experience: "",
+      licenseDocument: "",
+      vehicleRegistration: "",
+    });
+    setIsEditEmployeeOpen(true);
+  };
+
+  const handleUpdateEmployee = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedEmployee) return;
+    
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      // Prepare the API payload
+      const selectedRoles = Array.isArray(employeeData.role) ? employeeData.role : [employeeData.role].filter(Boolean);
+      const selectedDepartments = Array.isArray(employeeData.department) ? employeeData.department : [employeeData.department].filter(Boolean);
+      const primaryRole = selectedRoles.length > 0 ? selectedRoles[0] : 'EMPLOYEE';
+      const primaryDepartment = selectedDepartments.length > 0 ? selectedDepartments[0] : '';
+      
+      const payload = {
+        firstName: employeeData.firstName.trim(),
+        lastName: employeeData.lastName.trim(),
+        firstNameArabic: employeeData.firstNameArabic?.trim() || "",
+        lastNameArabic: employeeData.lastNameArabic?.trim() || "",
+        email: employeeData.email.trim(),
+        phone: employeeData.phone.trim(),
+        role: selectedRoles.join(', '), // Send all roles as comma-separated string
+        department: selectedDepartments.join(', '), // Send all departments as comma-separated string
+        companyId: employeeData.companyId.trim(),
+        actualCompanyId: employeeData.actualCompanyId === "SAME_AS_OFFICIAL" ? employeeData.companyId : (employeeData.actualCompanyId || ""),
+        salary: employeeData.salary?.trim() || "",
+        actualSalary: employeeData.actualSalary?.trim() || "",
+        startDate: employeeData.startDate,
+        status: employeeData.status,
+        location: employeeData.location?.trim() || "",
+        manager: employeeData.manager === "none" ? "" : (employeeData.manager?.trim() || ""),
+        skills: employeeData.skills ? employeeData.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
+        avatar: employeeData.avatar?.trim() || "",
+      };
+
+      const response = await fetch(`/api/employees/${selectedEmployee.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update employee');
+      }
+
+      setIsEditEmployeeOpen(false);
+      fetchEmployees();
+    } catch (error: any) {
+      console.error('Error updating employee:', error);
+      setError(error.message || 'Failed to update employee');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Helper function to convert Employee for IdCardFiller component
+  const convertEmployeeForIdCard = (employee: Employee) => {
+    return {
+      ...employee,
+      position: formatArrayField(employee.position), // Convert array to string
+      department: formatArrayField(employee.department) // Convert array to string
+    };
+  };
 
   if (loading) {
     return (
@@ -1079,7 +1150,7 @@ export default function EmployeesPage() {
                           <Label htmlFor="phone" className="text-sm font-medium">
                             Phone
                             {(() => {
-                              const isDriverRole = employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver');
+                              const isDriverRole = hasDriverRole(employeeData.role);
                               const isMarahCompany = companies.find(company => 
                                 company.id === employeeData.companyId && 
                                 company.name === 'MARAH Inflatable Games Rental'
@@ -1094,7 +1165,7 @@ export default function EmployeesPage() {
                             onChange={(e) => updateEmployeeData("phone", e.target.value)}
                             className="border-refined"
                             required={(() => {
-                              const isDriverRole = employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver');
+                              const isDriverRole = hasDriverRole(employeeData.role);
                               const isMarahCompany = companies.find(company => 
                                 company.id === employeeData.companyId && 
                                 company.name === 'MARAH Inflatable Games Rental'
@@ -1103,7 +1174,7 @@ export default function EmployeesPage() {
                             })()}
                           />
                           {(() => {
-                            const isDriverRole = employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver');
+                            const isDriverRole = hasDriverRole(employeeData.role);
                             const isMarahCompany = companies.find(company => 
                               company.id === employeeData.companyId && 
                               company.name === 'MARAH Inflatable Games Rental'
@@ -1191,78 +1262,24 @@ export default function EmployeesPage() {
                         </Select>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="department" className="text-sm font-medium">Department *</Label>
-                        <Select value={employeeData.department} onValueChange={(value) => updateEmployeeData("department", value)} required>
-                          <SelectTrigger className="border-refined">
-                            <SelectValue placeholder="Select department" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Engineering">Engineering</SelectItem>
-                            <SelectItem value="Product">Product</SelectItem>
-                            <SelectItem value="Design">Design</SelectItem>
-                            <SelectItem value="Marketing">Marketing</SelectItem>
-                            <SelectItem value="Sales">Sales</SelectItem>
-                            <SelectItem value="HR">Human Resources</SelectItem>
-                            <SelectItem value="Finance">Finance</SelectItem>
-                            <SelectItem value="Operations">Operations</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <DepartmentSelector
+                        value={employeeData.department}
+                        onChange={(value) => setEmployeeData(prev => ({ ...prev, department: value }))}
+                        required
+                        multi={true}
+                        error={validationErrors.department}
+                      />
 
                       {/* Role/Function and Employer Selection */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="role" className="text-sm font-medium flex items-center space-x-2">
-                            <Briefcase className="w-4 h-4" />
-                            <span>Role/Function *</span>
-                          </Label>
-                          <Select value={employeeData.role} onValueChange={(value) => updateEmployeeData("role", value)} required>
-                            <SelectTrigger className="border-refined">
-                              <SelectValue placeholder="Select employee role..." />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-60">
-                              <div className="px-2 py-1">
-                                <div className="text-xs font-medium text-muted-foreground mb-1">Standard Roles</div>
-                                <SelectItem value="MANAGER">Manager</SelectItem>
-                                <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
-                                <SelectItem value="DRIVER">
-                                  <div className="flex items-center space-x-2">
-                                    <span>Driver</span>
-                                    <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                                      Driver
-                                    </Badge>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="SALES_REPRESENTATIVE">Sales Representative</SelectItem>
-                                <SelectItem value="CUSTOMER_SERVICE">Customer Service</SelectItem>
-                                <SelectItem value="ACCOUNTANT">Accountant</SelectItem>
-                                <SelectItem value="HR_SPECIALIST">HR Specialist</SelectItem>
-                                <SelectItem value="MARKETING_SPECIALIST">Marketing Specialist</SelectItem>
-                                <SelectItem value="OPERATIONS_COORDINATOR">Operations Coordinator</SelectItem>
-                                <SelectItem value="WAREHOUSE_STAFF">Warehouse Staff</SelectItem>
-                                <SelectItem value="MAINTENANCE_TECHNICIAN">Maintenance Technician</SelectItem>
-                                <SelectItem value="DELIVERY_COORDINATOR">Delivery Coordinator</SelectItem>
-                                <SelectItem value="GAME_SETUP_SPECIALIST">Game Setup Specialist</SelectItem>
-                                <SelectItem value="QUALITY_INSPECTOR">Quality Inspector</SelectItem>
-                                <SelectItem value="ADMIN_ASSISTANT">Administrative Assistant</SelectItem>
-                                <SelectItem value="IT_SUPPORT">IT Support</SelectItem>
-                                <SelectItem value="SECURITY_GUARD">Security Guard</SelectItem>
-                                <SelectItem value="CLEANER">Cleaner</SelectItem>
-                                <SelectItem value="INTERN">Intern</SelectItem>
-                                <SelectItem value="CONSULTANT">Consultant</SelectItem>
-                                <SelectItem value="OTHER">Other</SelectItem>
-                              </div>
-                            </SelectContent>
-                          </Select>
-                          {employeeData.role && (employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver')) && (
-                            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                                Will be added to MARAH drivers if assigned to MARAH
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
+                        <RoleSelector
+                          value={employeeData.role}
+                          onChange={(value) => setEmployeeData(prev => ({ ...prev, role: value }))}
+                          selectedCompany={companies.find(c => c.id === employeeData.companyId) || null}
+                          required
+                          multi={true}
+                          error={validationErrors.role}
+                        />
 
                         <div className="space-y-2">
                           <Label htmlFor="employerId" className="text-sm font-medium flex items-center space-x-2">
@@ -1366,13 +1383,34 @@ export default function EmployeesPage() {
 
                         <div className="space-y-2">
                           <Label htmlFor="manager" className="text-sm font-medium">Manager</Label>
-                          <Input
-                            id="manager"
-                            placeholder="Manager name"
-                            value={employeeData.manager}
-                            onChange={(e) => updateEmployeeData("manager", e.target.value)}
-                            className="border-refined"
-                          />
+                          <Select value={employeeData.manager} onValueChange={(value) => updateEmployeeData("manager", value)}>
+                            <SelectTrigger className="border-refined">
+                              <SelectValue placeholder="Select manager (optional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No manager assigned</SelectItem>
+                              {managers.map(manager => (
+                                <SelectItem key={manager.id} value={`${manager.firstName} ${manager.lastName}`}>
+                                  <div className="flex items-center space-x-2">
+                                    <span>{manager.firstName} {manager.lastName}</span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {Array.isArray(manager.position) ? manager.position.join(', ') : manager.position}
+                                    </Badge>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                              {managers.length === 0 && employeeData.companyId && (
+                                <div className="px-2 py-1 text-sm text-muted-foreground">
+                                  No managers found for selected company
+                                </div>
+                              )}
+                              {!employeeData.companyId && (
+                                <div className="px-2 py-1 text-sm text-muted-foreground">
+                                  Select a company first to see available managers
+                                </div>
+                              )}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
 
@@ -1404,14 +1442,14 @@ export default function EmployeesPage() {
                       </div>
 
                       {/* Driver-Specific Fields - Show only when DRIVER role is selected */}
-                      {(employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver')) && (
+                      {hasDriverRole(employeeData.role) && (
                         <>
                           <div className="border-t pt-6">
                             <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
                               <Car className="w-5 h-5 text-blue-600" />
                               <span>Driver Information</span>
                               <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                                Required for MARAH drivers
+                                Required for {companies.find(c => c.id === employeeData.companyId)?.name || 'selected company'} drivers
                               </Badge>
                             </h3>
 
@@ -1766,7 +1804,7 @@ export default function EmployeesPage() {
                             <h4 className="font-semibold text-base sm:text-lg text-gray-900 truncate group-hover:text-blue-700 transition-colors">
                               {employee.firstName} {employee.lastName}
                             </h4>
-                            <p className="text-sm text-muted-foreground truncate">{employee.position}</p>
+                            <p className="text-sm text-muted-foreground truncate">{getDisplayText(employee.position)}</p>
                             <p className="text-xs text-muted-foreground truncate">{employee.companyName}</p>
                             <div className="flex items-center space-x-2 mt-2">
                               <Badge className={cn("text-xs", getStatusColor(employee.status))}>
@@ -1779,7 +1817,7 @@ export default function EmployeesPage() {
                         <div className="space-y-2 mb-4">
                           <div className="flex items-center text-sm text-muted-foreground">
                             <Briefcase className="w-4 h-4 mr-2 flex-shrink-0" />
-                            <span className="truncate">{employee.department}</span>
+                            <span className="truncate">{getDisplayText(employee.department)}</span>
                           </div>
                           <div className="flex items-center text-sm text-muted-foreground">
                             <Mail className="w-4 h-4 mr-2 flex-shrink-0" />
@@ -1893,13 +1931,13 @@ export default function EmployeesPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell className="py-4">
-                                  <span className="text-sm font-medium truncate">{employee.position}</span>
+                                  <span className="text-sm font-medium truncate">{getDisplayText(employee.position)}</span>
                                 </TableCell>
                                 <TableCell className="py-4">
                                   <span className="text-sm text-gray-600 truncate">{employee.companyName}</span>
                                 </TableCell>
                                 <TableCell className="py-4">
-                                  <span className="text-sm text-gray-600 truncate">{employee.department}</span>
+                                  <span className="text-sm text-gray-600 truncate">{getDisplayText(employee.department)}</span>
                                 </TableCell>
                                 <TableCell className="py-4">
                                   <Badge className={cn("text-xs", getStatusColor(employee.status))}>
@@ -2026,8 +2064,17 @@ export default function EmployeesPage() {
                     </Avatar>
                     <div className="flex-1">
                       <h3 className="text-xl font-semibold">{selectedEmployee.firstName} {selectedEmployee.lastName}</h3>
-                      <p className="text-muted-foreground">{selectedEmployee.position}</p>
-                      <p className="text-sm text-muted-foreground">{selectedEmployee.companyName} • {selectedEmployee.department}</p>
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-sm text-muted-foreground">Position(s): </span>
+                          {renderMultipleBadges(selectedEmployee.position, "default")}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{selectedEmployee.companyName}</p>
+                        <div>
+                          <span className="text-sm text-muted-foreground">Department(s): </span>
+                          {renderMultipleBadges(selectedEmployee.department, "outline")}
+                        </div>
+                      </div>
                       <div className="flex items-center space-x-2 mt-2">
                         <Badge className={getStatusColor(selectedEmployee.status)}>
                           {selectedEmployee.status.replace('_', ' ')}
@@ -2068,8 +2115,9 @@ export default function EmployeesPage() {
                         <div className="text-sm">
                           <span className="text-muted-foreground">Start Date:</span> {formatDate(selectedEmployee.startDate)}
                         </div>
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">Department:</span> {selectedEmployee.department}
+                        <div className="space-y-1">
+                          <span className="text-sm text-muted-foreground">Department(s):</span>
+                          {renderMultipleBadges(selectedEmployee.department, "outline")}
                         </div>
                         <div className="text-sm">
                           <span className="text-muted-foreground">Status:</span> {selectedEmployee.status.replace('_', ' ')}
@@ -2079,6 +2127,21 @@ export default function EmployeesPage() {
                             <span className="text-muted-foreground">Manager:</span> {selectedEmployee.manager}
                           </div>
                         )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Roles & Departments Details */}
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">Roles & Departments</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium text-gray-700">All Position(s):</div>
+                        {renderMultipleBadges(selectedEmployee.position, "default")}
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium text-gray-700">All Department(s):</div>
+                        {renderMultipleBadges(selectedEmployee.department, "outline")}
                       </div>
                     </div>
                   </div>
@@ -2384,7 +2447,7 @@ export default function EmployeesPage() {
                       <Label htmlFor="phone" className="text-sm font-medium">
                         Phone
                         {(() => {
-                          const isDriverRole = employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver');
+                          const isDriverRole = hasDriverRole(employeeData.role);
                           const isMarahCompany = companies.find(company => 
                             company.id === employeeData.companyId && 
                             company.name === 'MARAH Inflatable Games Rental'
@@ -2399,7 +2462,7 @@ export default function EmployeesPage() {
                         onChange={(e) => updateEmployeeData("phone", e.target.value)}
                         className="border-refined"
                         required={(() => {
-                          const isDriverRole = employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver');
+                          const isDriverRole = hasDriverRole(employeeData.role);
                           const isMarahCompany = companies.find(company => 
                             company.id === employeeData.companyId && 
                             company.name === 'MARAH Inflatable Games Rental'
@@ -2408,7 +2471,7 @@ export default function EmployeesPage() {
                         })()}
                       />
                       {(() => {
-                        const isDriverRole = employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver');
+                        const isDriverRole = hasDriverRole(employeeData.role);
                         const isMarahCompany = companies.find(company => 
                           company.id === employeeData.companyId && 
                           company.name === 'MARAH Inflatable Games Rental'
@@ -2496,60 +2559,23 @@ export default function EmployeesPage() {
                     </Select>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="department" className="text-sm font-medium">Department *</Label>
-                      <Select value={employeeData.department} onValueChange={(value) => updateEmployeeData("department", value)} required>
-                        <SelectTrigger className="border-refined">
-                          <SelectValue placeholder="Select department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Engineering">Engineering</SelectItem>
-                          <SelectItem value="Product">Product</SelectItem>
-                          <SelectItem value="Design">Design</SelectItem>
-                          <SelectItem value="Marketing">Marketing</SelectItem>
-                          <SelectItem value="Sales">Sales</SelectItem>
-                          <SelectItem value="HR">Human Resources</SelectItem>
-                          <SelectItem value="Finance">Finance</SelectItem>
-                          <SelectItem value="Operations">Operations</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <DepartmentSelector
+                    value={employeeData.department}
+                    onChange={(value) => setEmployeeData(prev => ({ ...prev, department: value }))}
+                    required
+                    multi={true}
+                    error={validationErrors.department}
+                  />
 
-                    <div className="space-y-2">
-                      <Label htmlFor="role" className="text-sm font-medium">Role/Function *</Label>
-                      <Select value={employeeData.role} onValueChange={(value) => updateEmployeeData("role", value)} required>
-                        <SelectTrigger className="border-refined">
-                          <SelectValue placeholder="Select employee role..." />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60">
-                          <div className="px-2 py-1">
-                            <div className="text-xs font-medium text-muted-foreground mb-1">Standard Roles</div>
-                            <SelectItem value="MANAGER">Manager</SelectItem>
-                            <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
-                            <SelectItem value="DRIVER">Driver</SelectItem>
-                            <SelectItem value="SALES_REPRESENTATIVE">Sales Representative</SelectItem>
-                            <SelectItem value="CUSTOMER_SERVICE">Customer Service</SelectItem>
-                            <SelectItem value="ACCOUNTANT">Accountant</SelectItem>
-                            <SelectItem value="HR_SPECIALIST">HR Specialist</SelectItem>
-                            <SelectItem value="MARKETING_SPECIALIST">Marketing Specialist</SelectItem>
-                            <SelectItem value="OPERATIONS_COORDINATOR">Operations Coordinator</SelectItem>
-                            <SelectItem value="WAREHOUSE_STAFF">Warehouse Staff</SelectItem>
-                            <SelectItem value="MAINTENANCE_TECHNICIAN">Maintenance Technician</SelectItem>
-                            <SelectItem value="DELIVERY_COORDINATOR">Delivery Coordinator</SelectItem>
-                            <SelectItem value="GAME_SETUP_SPECIALIST">Game Setup Specialist</SelectItem>
-                            <SelectItem value="QUALITY_INSPECTOR">Quality Inspector</SelectItem>
-                            <SelectItem value="ADMIN_ASSISTANT">Administrative Assistant</SelectItem>
-                            <SelectItem value="IT_SUPPORT">IT Support</SelectItem>
-                            <SelectItem value="SECURITY_GUARD">Security Guard</SelectItem>
-                            <SelectItem value="CLEANER">Cleaner</SelectItem>
-                            <SelectItem value="INTERN">Intern</SelectItem>
-                            <SelectItem value="CONSULTANT">Consultant</SelectItem>
-                            <SelectItem value="OTHER">Other</SelectItem>
-                          </div>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div>
+                    <RoleSelector
+                      value={employeeData.role}
+                      onChange={(value) => setEmployeeData(prev => ({ ...prev, role: value }))}
+                      selectedCompany={companies.find(c => c.id === employeeData.companyId) || null}
+                      required
+                      multi={true}
+                      error={validationErrors.role}
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2621,13 +2647,34 @@ export default function EmployeesPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="manager" className="text-sm font-medium">Manager</Label>
-                      <Input
-                        id="manager"
-                        placeholder="Manager name"
-                        value={employeeData.manager}
-                        onChange={(e) => updateEmployeeData("manager", e.target.value)}
-                        className="border-refined"
-                      />
+                      <Select value={employeeData.manager} onValueChange={(value) => updateEmployeeData("manager", value)}>
+                        <SelectTrigger className="border-refined">
+                          <SelectValue placeholder="Select manager (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No manager assigned</SelectItem>
+                          {managers.map(manager => (
+                            <SelectItem key={manager.id} value={`${manager.firstName} ${manager.lastName}`}>
+                              <div className="flex items-center space-x-2">
+                                <span>{manager.firstName} {manager.lastName}</span>
+                                <Badge variant="outline" className="text-xs">
+                                  {Array.isArray(manager.position) ? manager.position.join(', ') : manager.position}
+                                </Badge>
+                              </div>
+                            </SelectItem>
+                          ))}
+                          {managers.length === 0 && employeeData.companyId && (
+                            <div className="px-2 py-1 text-sm text-muted-foreground">
+                              No managers found for selected company
+                            </div>
+                          )}
+                          {!employeeData.companyId && (
+                            <div className="px-2 py-1 text-sm text-muted-foreground">
+                              Select a company first to see available managers
+                            </div>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -2659,14 +2706,14 @@ export default function EmployeesPage() {
                   </div>
 
                   {/* Driver-Specific Fields - Show only when DRIVER role is selected */}
-                  {(employeeData.role === 'DRIVER' || employeeData.role.toLowerCase().includes('driver')) && (
+                  {hasDriverRole(employeeData.role) && (
                     <>
                       <div className="border-t pt-6">
                         <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
                           <Car className="w-5 h-5 text-blue-600" />
                           <span>Driver Information</span>
                           <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                            Required for MARAH drivers
+                            Required for {companies.find(c => c.id === employeeData.companyId)?.name || 'selected company'} drivers
                           </Badge>
                         </h3>
 
@@ -2912,7 +2959,7 @@ export default function EmployeesPage() {
               <div className="max-h-[calc(90vh-8rem)] overflow-y-auto pr-2">
                 {selectedEmployeeForIdFiller && (
                   <IdCardFiller
-                    employee={selectedEmployeeForIdFiller}
+                    employee={convertEmployeeForIdCard(selectedEmployeeForIdFiller)}
                     company={companies.find(c => c.id === selectedEmployeeForIdFiller.companyId) || { id: '', name: 'Unknown Company' }}
                     onClose={() => setIsIdCardFillerOpen(false)}
                   />

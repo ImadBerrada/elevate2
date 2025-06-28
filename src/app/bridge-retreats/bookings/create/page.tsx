@@ -20,7 +20,9 @@ import {
   CheckCircle,
   Plus,
   Minus,
-  Search
+  Search,
+  UserPlus,
+  UserCheck
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { useSidebar } from "@/contexts/sidebar-context";
@@ -71,6 +75,22 @@ interface Guest {
   medicalConditions?: string;
 }
 
+interface ExistingGuest {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  dateOfBirth?: string;
+  nationality?: string;
+  profileImage?: string;
+  status: string;
+  loyaltyTier: string;
+  loyaltyPoints: number;
+  totalStays?: number;
+  lastStay?: any;
+}
+
 interface BookingFormData {
   retreatId: string;
   checkInDate: string;
@@ -93,6 +113,13 @@ export default function CreateBookingPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [step, setStep] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Guest management state
+  const [existingGuests, setExistingGuests] = useState<ExistingGuest[]>([]);
+  const [guestSearchTerm, setGuestSearchTerm] = useState("");
+  const [guestMode, setGuestMode] = useState<'existing' | 'new'>('existing');
+  const [selectedExistingGuests, setSelectedExistingGuests] = useState<ExistingGuest[]>([]);
+  const [guestsLoading, setGuestsLoading] = useState(false);
   
   const [formData, setFormData] = useState<BookingFormData>({
     retreatId: "",
@@ -117,7 +144,19 @@ export default function CreateBookingPage() {
 
   useEffect(() => {
     fetchRetreats();
+    fetchExistingGuests();
   }, []);
+
+  useEffect(() => {
+    if (guestSearchTerm) {
+      const delayedSearch = setTimeout(() => {
+        fetchExistingGuests();
+      }, 300);
+      return () => clearTimeout(delayedSearch);
+    } else {
+      fetchExistingGuests();
+    }
+  }, [guestSearchTerm]);
 
   useEffect(() => {
     if (selectedRetreat) {
@@ -157,6 +196,21 @@ export default function CreateBookingPage() {
     }
   };
 
+  const fetchExistingGuests = async () => {
+    try {
+      setGuestsLoading(true);
+      const response = await fetch(`/api/bridge-retreats/guests?${guestSearchTerm ? `search=${guestSearchTerm}` : ''}`);
+      if (response.ok) {
+        const data = await response.json();
+        setExistingGuests(data.guests || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch guests:', err);
+    } finally {
+      setGuestsLoading(false);
+    }
+  };
+
   const handleGuestCountChange = (count: number) => {
     const newGuests = [...formData.guests];
     
@@ -193,6 +247,38 @@ export default function CreateBookingPage() {
     setFormData(prev => ({ ...prev, guests: newGuests }));
   };
 
+  const handleExistingGuestSelect = (guest: ExistingGuest) => {
+    const isSelected = selectedExistingGuests.some(g => g.id === guest.id);
+    if (isSelected) {
+      setSelectedExistingGuests(prev => prev.filter(g => g.id !== guest.id));
+    } else {
+      if (selectedExistingGuests.length < formData.guestCount) {
+        setSelectedExistingGuests(prev => [...prev, guest]);
+      }
+    }
+  };
+
+  const handleGuestModeChange = (mode: 'existing' | 'new') => {
+    setGuestMode(mode);
+    if (mode === 'existing') {
+      setSelectedExistingGuests([]);
+    } else {
+      // Reset to new guest forms
+      const newGuests = Array(formData.guestCount).fill(null).map(() => ({
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        dateOfBirth: "",
+        emergencyContact: "",
+        emergencyPhone: "",
+        dietaryRestrictions: "",
+        medicalConditions: ""
+      }));
+      setFormData(prev => ({ ...prev, guests: newGuests }));
+    }
+  };
+
   const validateForm = () => {
     if (!formData.retreatId) {
       setError('Please select a retreat');
@@ -209,19 +295,27 @@ export default function CreateBookingPage() {
       return false;
     }
 
-    // Validate all guests have required fields
-    for (let i = 0; i < formData.guestCount; i++) {
-      const guest = formData.guests[i];
-      if (!guest.firstName || !guest.lastName || !guest.email) {
-        setError(`Please fill in all required fields for Guest ${i + 1}`);
+    // Validate guests based on mode
+    if (guestMode === 'existing') {
+      if (selectedExistingGuests.length !== formData.guestCount) {
+        setError(`Please select ${formData.guestCount} guest(s)`);
         return false;
       }
+    } else {
+      // Validate all guests have required fields for new guest mode
+      for (let i = 0; i < formData.guestCount; i++) {
+        const guest = formData.guests[i];
+        if (!guest.firstName || !guest.lastName || !guest.email) {
+          setError(`Please fill in all required fields for Guest ${i + 1}`);
+          return false;
+        }
 
-      // Basic email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(guest.email)) {
-        setError(`Please enter a valid email for Guest ${i + 1}`);
-        return false;
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(guest.email)) {
+          setError(`Please enter a valid email for Guest ${i + 1}`);
+          return false;
+        }
       }
     }
 
@@ -235,21 +329,52 @@ export default function CreateBookingPage() {
       setLoading(true);
       setError(null);
 
+      // Prepare guests data based on mode
+      let guestsData;
+      if (guestMode === 'existing') {
+        // Convert existing guests to the format expected by the API
+        guestsData = selectedExistingGuests.map(guest => ({
+          id: guest.id,
+          firstName: guest.firstName,
+          lastName: guest.lastName,
+          email: guest.email,
+          phone: guest.phone || '',
+          dateOfBirth: guest.dateOfBirth || '',
+          emergencyContact: '',
+          emergencyPhone: '',
+          dietaryRestrictions: '',
+          medicalConditions: ''
+        }));
+      } else {
+        guestsData = formData.guests.slice(0, formData.guestCount);
+      }
+
       const bookingData = {
         retreatId: formData.retreatId,
         checkInDate: formData.checkInDate,
         checkOutDate: formData.checkOutDate,
         guestCount: formData.guestCount,
-        guests: formData.guests.slice(0, formData.guestCount),
+        guests: guestsData,
         specialRequests: formData.specialRequests,
         totalAmount: formData.totalAmount
       };
 
       const result = await apiClient.createRetreatBooking(bookingData);
+      console.log('Booking creation result:', result);
       
       setSuccess('Booking created successfully!');
       setTimeout(() => {
-        router.push(`/bridge-retreats/bookings/${result.id}`);
+        // The API returns { booking: {...}, facilityUpdated: boolean, message: string }
+        const bookingId = result.booking?.id || result.id;
+        console.log('Navigating to booking ID:', bookingId);
+        
+        if (!bookingId) {
+          console.error('No booking ID found in result:', result);
+          setError('Booking was created but could not navigate to details page');
+          return;
+        }
+        
+        router.push(`/bridge-retreats/bookings/${bookingId}`);
       }, 2000);
 
     } catch (err) {
@@ -282,16 +407,17 @@ export default function CreateBookingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
+      
       <div className={cn(
-        "transition-all duration-300 ease-in-out",
-        isOpen && !isMobile ? "ml-64" : "ml-0"
+        "flex-1 flex flex-col transition-all duration-300",
+        isDesktop && isOpen ? "ml-0" : "ml-0",
+        "min-w-0"
       )}>
         <Header />
-        
-        <main className="p-6">
-          <div className="max-w-6xl mx-auto">
+
+        <main className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
             {/* Header */}
             <motion.div 
               className="flex items-center justify-between mb-8"
@@ -305,8 +431,8 @@ export default function CreateBookingPage() {
                   </Button>
                 </Link>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Create New Booking</h1>
-                  <p className="text-gray-600 mt-1">Book a retreat for your guests</p>
+                  <h1 className="text-3xl font-prestigious text-gradient">Create New Booking</h1>
+                  <p className="text-refined text-muted-foreground mt-1">Book a retreat for your guests</p>
                 </div>
               </div>
             </motion.div>
@@ -375,13 +501,13 @@ export default function CreateBookingPage() {
             {/* Step 1: Select Retreat */}
             {step === 1 && (
               <motion.div {...fadeInUp} transition={{ delay: 0.2 }}>
-                <Card>
+                <Card className="card-premium border-refined">
                   <CardHeader>
-                    <CardTitle className="flex items-center">
+                    <CardTitle className="flex items-center font-elegant">
                       <Search className="h-5 w-5 mr-2" />
                       Select a Retreat
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-refined">
                       Choose from our available retreats
                     </CardDescription>
                   </CardHeader>
@@ -423,7 +549,7 @@ export default function CreateBookingPage() {
                               <Calendar className="h-8 w-8 text-blue-600" />
                             </div>
                             
-                            <h3 className="font-semibold text-lg mb-2">{retreat.title}</h3>
+                            <h3 className="font-elegant text-lg mb-2">{retreat.title}</h3>
                             
                             <div className="space-y-2 text-sm text-gray-600">
                               <div className="flex items-center">
@@ -446,8 +572,8 @@ export default function CreateBookingPage() {
 
                             <div className="flex items-center justify-between mt-4">
                               <Badge variant="secondary">{retreat.type}</Badge>
-                              <span className="font-bold text-lg text-blue-600">
-                                {formatCurrency(retreat.price)}
+                              <span className="font-prestigious text-lg text-gradient">
+                                AED {retreat.price.toLocaleString()}
                               </span>
                             </div>
                           </motion.div>
@@ -483,7 +609,7 @@ export default function CreateBookingPage() {
                           Guest Information
                         </CardTitle>
                         <CardDescription>
-                          Enter details for all guests
+                          Select existing guests or create new ones
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
@@ -513,111 +639,225 @@ export default function CreateBookingPage() {
                           </div>
                         </div>
 
-                        {/* Guest Forms */}
-                        <div className="space-y-8">
-                          {formData.guests.slice(0, formData.guestCount).map((guest, index) => (
-                            <div key={index} className="border rounded-lg p-6">
-                              <h3 className="text-lg font-semibold mb-4">
-                                Guest {index + 1} {index === 0 && "(Primary)"}
-                              </h3>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <Label htmlFor={`firstName-${index}`}>First Name *</Label>
-                                  <Input
-                                    id={`firstName-${index}`}
-                                    value={guest.firstName}
-                                    onChange={(e) => handleGuestChange(index, 'firstName', e.target.value)}
-                                    placeholder="Enter first name"
-                                  />
-                                </div>
+                        {/* Guest Mode Tabs */}
+                        <Tabs value={guestMode} onValueChange={(value) => handleGuestModeChange(value as 'existing' | 'new')} className="mb-6">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="existing" className="flex items-center space-x-2">
+                              <UserCheck className="h-4 w-4" />
+                              <span>Select Existing Guests</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="new" className="flex items-center space-x-2">
+                              <UserPlus className="h-4 w-4" />
+                              <span>Create New Guests</span>
+                            </TabsTrigger>
+                          </TabsList>
+
+                          {/* Existing Guests Tab */}
+                          <TabsContent value="existing" className="space-y-4">
+                            {/* Guest Search */}
+                            <div className="relative">
+                              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                              <Input
+                                placeholder="Search guests by name or email..."
+                                value={guestSearchTerm}
+                                onChange={(e) => setGuestSearchTerm(e.target.value)}
+                                className="pl-10"
+                              />
+                            </div>
+
+                            {/* Selected Guests Count */}
+                            <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                              <span className="text-sm text-blue-700">
+                                Selected: {selectedExistingGuests.length} / {formData.guestCount} guests
+                              </span>
+                              {selectedExistingGuests.length > 0 && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setSelectedExistingGuests([])}
+                                >
+                                  Clear Selection
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Existing Guests List */}
+                            {guestsLoading ? (
+                              <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                                <span className="ml-2">Loading guests...</span>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+                                {existingGuests.map((guest) => {
+                                  const isSelected = selectedExistingGuests.some(g => g.id === guest.id);
+                                  const canSelect = !isSelected && selectedExistingGuests.length < formData.guestCount;
+                                  
+                                  return (
+                                    <motion.div
+                                      key={guest.id}
+                                      className={cn(
+                                        "border rounded-lg p-4 cursor-pointer transition-all",
+                                        isSelected 
+                                          ? "border-blue-500 bg-blue-50" 
+                                          : canSelect 
+                                            ? "border-gray-200 hover:border-gray-300 hover:shadow-sm" 
+                                            : "border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed"
+                                      )}
+                                      onClick={() => (canSelect || isSelected) && handleExistingGuestSelect(guest)}
+                                      whileHover={canSelect || isSelected ? { scale: 1.02 } : {}}
+                                      whileTap={canSelect || isSelected ? { scale: 0.98 } : {}}
+                                    >
+                                      <div className="flex items-center space-x-3">
+                                        <Avatar className="h-10 w-10">
+                                          <AvatarImage src={guest.profileImage} />
+                                          <AvatarFallback>
+                                            {guest.firstName[0]}{guest.lastName[0]}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center space-x-2">
+                                            <h3 className="font-medium text-sm truncate">
+                                              {guest.firstName} {guest.lastName}
+                                            </h3>
+                                            {isSelected && (
+                                              <CheckCircle className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                                            )}
+                                          </div>
+                                          <p className="text-xs text-gray-500 truncate">{guest.email}</p>
+                                          <div className="flex items-center space-x-2 mt-1">
+                                            <Badge variant="secondary" className="text-xs">
+                                              {guest.loyaltyTier}
+                                            </Badge>
+                                            <span className="text-xs text-gray-500">
+                                              {guest.loyaltyPoints} pts
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </motion.div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {existingGuests.length === 0 && !guestsLoading && (
+                              <div className="text-center py-8">
+                                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">No guests found</h3>
+                                <p className="text-gray-500">
+                                  {guestSearchTerm ? 'Try adjusting your search terms' : 'No guests have been created yet'}
+                                </p>
+                              </div>
+                            )}
+                          </TabsContent>
+
+                          {/* New Guests Tab */}
+                          <TabsContent value="new" className="space-y-6">
+                            {formData.guests.slice(0, formData.guestCount).map((guest, index) => (
+                              <div key={index} className="border rounded-lg p-6">
+                                <h3 className="text-lg font-semibold mb-4">
+                                  Guest {index + 1} {index === 0 && "(Primary)"}
+                                </h3>
                                 
-                                <div>
-                                  <Label htmlFor={`lastName-${index}`}>Last Name *</Label>
-                                  <Input
-                                    id={`lastName-${index}`}
-                                    value={guest.lastName}
-                                    onChange={(e) => handleGuestChange(index, 'lastName', e.target.value)}
-                                    placeholder="Enter last name"
-                                  />
-                                </div>
-                                
-                                <div>
-                                  <Label htmlFor={`email-${index}`}>Email *</Label>
-                                  <Input
-                                    id={`email-${index}`}
-                                    type="email"
-                                    value={guest.email}
-                                    onChange={(e) => handleGuestChange(index, 'email', e.target.value)}
-                                    placeholder="Enter email address"
-                                  />
-                                </div>
-                                
-                                <div>
-                                  <Label htmlFor={`phone-${index}`}>Phone</Label>
-                                  <Input
-                                    id={`phone-${index}`}
-                                    value={guest.phone || ''}
-                                    onChange={(e) => handleGuestChange(index, 'phone', e.target.value)}
-                                    placeholder="Enter phone number"
-                                  />
-                                </div>
-                                
-                                <div>
-                                  <Label htmlFor={`dateOfBirth-${index}`}>Date of Birth</Label>
-                                  <Input
-                                    id={`dateOfBirth-${index}`}
-                                    type="date"
-                                    value={guest.dateOfBirth || ''}
-                                    onChange={(e) => handleGuestChange(index, 'dateOfBirth', e.target.value)}
-                                  />
-                                </div>
-                                
-                                <div>
-                                  <Label htmlFor={`emergencyContact-${index}`}>Emergency Contact</Label>
-                                  <Input
-                                    id={`emergencyContact-${index}`}
-                                    value={guest.emergencyContact || ''}
-                                    onChange={(e) => handleGuestChange(index, 'emergencyContact', e.target.value)}
-                                    placeholder="Emergency contact name"
-                                  />
-                                </div>
-                                
-                                <div className="md:col-span-2">
-                                  <Label htmlFor={`emergencyPhone-${index}`}>Emergency Phone</Label>
-                                  <Input
-                                    id={`emergencyPhone-${index}`}
-                                    value={guest.emergencyPhone || ''}
-                                    onChange={(e) => handleGuestChange(index, 'emergencyPhone', e.target.value)}
-                                    placeholder="Emergency contact phone"
-                                  />
-                                </div>
-                                
-                                <div className="md:col-span-2">
-                                  <Label htmlFor={`dietaryRestrictions-${index}`}>Dietary Restrictions</Label>
-                                  <Textarea
-                                    id={`dietaryRestrictions-${index}`}
-                                    value={guest.dietaryRestrictions || ''}
-                                    onChange={(e) => handleGuestChange(index, 'dietaryRestrictions', e.target.value)}
-                                    placeholder="Any dietary restrictions or preferences"
-                                    rows={2}
-                                  />
-                                </div>
-                                
-                                <div className="md:col-span-2">
-                                  <Label htmlFor={`medicalConditions-${index}`}>Medical Conditions</Label>
-                                  <Textarea
-                                    id={`medicalConditions-${index}`}
-                                    value={guest.medicalConditions || ''}
-                                    onChange={(e) => handleGuestChange(index, 'medicalConditions', e.target.value)}
-                                    placeholder="Any medical conditions we should be aware of"
-                                    rows={2}
-                                  />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <Label htmlFor={`firstName-${index}`}>First Name *</Label>
+                                    <Input
+                                      id={`firstName-${index}`}
+                                      value={guest.firstName}
+                                      onChange={(e) => handleGuestChange(index, 'firstName', e.target.value)}
+                                      placeholder="Enter first name"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <Label htmlFor={`lastName-${index}`}>Last Name *</Label>
+                                    <Input
+                                      id={`lastName-${index}`}
+                                      value={guest.lastName}
+                                      onChange={(e) => handleGuestChange(index, 'lastName', e.target.value)}
+                                      placeholder="Enter last name"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <Label htmlFor={`email-${index}`}>Email *</Label>
+                                    <Input
+                                      id={`email-${index}`}
+                                      type="email"
+                                      value={guest.email}
+                                      onChange={(e) => handleGuestChange(index, 'email', e.target.value)}
+                                      placeholder="Enter email address"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <Label htmlFor={`phone-${index}`}>Phone</Label>
+                                    <Input
+                                      id={`phone-${index}`}
+                                      value={guest.phone || ''}
+                                      onChange={(e) => handleGuestChange(index, 'phone', e.target.value)}
+                                      placeholder="Enter phone number"
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <Label htmlFor={`dateOfBirth-${index}`}>Date of Birth</Label>
+                                    <Input
+                                      id={`dateOfBirth-${index}`}
+                                      type="date"
+                                      value={guest.dateOfBirth || ''}
+                                      onChange={(e) => handleGuestChange(index, 'dateOfBirth', e.target.value)}
+                                    />
+                                  </div>
+                                  
+                                  <div>
+                                    <Label htmlFor={`emergencyContact-${index}`}>Emergency Contact</Label>
+                                    <Input
+                                      id={`emergencyContact-${index}`}
+                                      value={guest.emergencyContact || ''}
+                                      onChange={(e) => handleGuestChange(index, 'emergencyContact', e.target.value)}
+                                      placeholder="Emergency contact name"
+                                    />
+                                  </div>
+                                  
+                                  <div className="md:col-span-2">
+                                    <Label htmlFor={`emergencyPhone-${index}`}>Emergency Phone</Label>
+                                    <Input
+                                      id={`emergencyPhone-${index}`}
+                                      value={guest.emergencyPhone || ''}
+                                      onChange={(e) => handleGuestChange(index, 'emergencyPhone', e.target.value)}
+                                      placeholder="Emergency contact phone"
+                                    />
+                                  </div>
+                                  
+                                  <div className="md:col-span-2">
+                                    <Label htmlFor={`dietaryRestrictions-${index}`}>Dietary Restrictions</Label>
+                                    <Textarea
+                                      id={`dietaryRestrictions-${index}`}
+                                      value={guest.dietaryRestrictions || ''}
+                                      onChange={(e) => handleGuestChange(index, 'dietaryRestrictions', e.target.value)}
+                                      placeholder="Any dietary restrictions or preferences"
+                                      rows={2}
+                                    />
+                                  </div>
+                                  
+                                  <div className="md:col-span-2">
+                                    <Label htmlFor={`medicalConditions-${index}`}>Medical Conditions</Label>
+                                    <Textarea
+                                      id={`medicalConditions-${index}`}
+                                      value={guest.medicalConditions || ''}
+                                      onChange={(e) => handleGuestChange(index, 'medicalConditions', e.target.value)}
+                                      placeholder="Any medical conditions we should be aware of"
+                                      rows={2}
+                                    />
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </TabsContent>
+                        </Tabs>
 
                         {/* Special Requests */}
                         <div className="mt-6">
@@ -728,21 +968,48 @@ export default function CreateBookingPage() {
                         <div className="mb-6">
                           <h3 className="text-lg font-semibold mb-3">Guest Details</h3>
                           <div className="space-y-3">
-                            {formData.guests.slice(0, formData.guestCount).map((guest, index) => (
-                              <div key={index} className="bg-gray-50 rounded-lg p-4">
-                                <h4 className="font-semibold">
-                                  {guest.firstName} {guest.lastName} {index === 0 && "(Primary)"}
-                                </h4>
-                                <div className="grid grid-cols-2 gap-4 mt-2 text-sm text-gray-600">
-                                  <div>Email: {guest.email}</div>
-                                  {guest.phone && <div>Phone: {guest.phone}</div>}
-                                  {guest.emergencyContact && <div>Emergency: {guest.emergencyContact}</div>}
-                                  {guest.dietaryRestrictions && (
-                                    <div className="col-span-2">Dietary: {guest.dietaryRestrictions}</div>
-                                  )}
+                            {guestMode === 'existing' ? (
+                              selectedExistingGuests.map((guest, index) => (
+                                <div key={guest.id} className="bg-gray-50 rounded-lg p-4">
+                                  <div className="flex items-center space-x-3 mb-2">
+                                    <Avatar className="h-8 w-8">
+                                      <AvatarImage src={guest.profileImage} />
+                                      <AvatarFallback className="text-xs">
+                                        {guest.firstName[0]}{guest.lastName[0]}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <h4 className="font-semibold">
+                                      {guest.firstName} {guest.lastName} {index === 0 && "(Primary)"}
+                                    </h4>
+                                    <Badge variant="secondary" className="text-xs">
+                                      {guest.loyaltyTier}
+                                    </Badge>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                                    <div>Email: {guest.email}</div>
+                                    {guest.phone && <div>Phone: {guest.phone}</div>}
+                                    {guest.nationality && <div>Nationality: {guest.nationality}</div>}
+                                    <div>Loyalty Points: {guest.loyaltyPoints}</div>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))
+                            ) : (
+                              formData.guests.slice(0, formData.guestCount).map((guest, index) => (
+                                <div key={index} className="bg-gray-50 rounded-lg p-4">
+                                  <h4 className="font-semibold">
+                                    {guest.firstName} {guest.lastName} {index === 0 && "(Primary)"}
+                                  </h4>
+                                  <div className="grid grid-cols-2 gap-4 mt-2 text-sm text-gray-600">
+                                    <div>Email: {guest.email}</div>
+                                    {guest.phone && <div>Phone: {guest.phone}</div>}
+                                    {guest.emergencyContact && <div>Emergency: {guest.emergencyContact}</div>}
+                                    {guest.dietaryRestrictions && (
+                                      <div className="col-span-2">Dietary: {guest.dietaryRestrictions}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            )}
                           </div>
                         </div>
 
@@ -851,7 +1118,6 @@ export default function CreateBookingPage() {
                 </div>
               </motion.div>
             )}
-          </div>
         </main>
       </div>
     </div>

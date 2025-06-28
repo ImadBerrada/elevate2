@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { withAuth, AuthenticatedRequest } from '@/lib/middleware';
+import { withRole, AuthenticatedRequest } from '@/lib/middleware';
+import { verifyCompanyAccess } from '@/lib/company-access';
 
 async function handler(request: AuthenticatedRequest) {
   try {
@@ -12,16 +13,10 @@ async function handler(request: AuthenticatedRequest) {
       return NextResponse.json({ error: 'Company ID is required' }, { status: 400 });
     }
 
-    // Verify company belongs to user
-    const company = await prisma.company.findFirst({
-      where: {
-        id: companyId,
-        userId: request.user!.userId,
-      },
-    });
-
-    if (!company) {
-      return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+    // Verify user has access to this company
+    const hasAccess = await verifyCompanyAccess(request.user!.userId, request.user!.role, companyId);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Company access denied' }, { status: 403 });
     }
 
     const startDate = new Date();
@@ -196,4 +191,4 @@ async function handler(request: AuthenticatedRequest) {
   }
 }
 
-export const GET = withAuth(handler); 
+export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(handler); 

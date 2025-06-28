@@ -32,7 +32,15 @@ import {
   X,
   LogOut,
   BarChart3,
-  Calendar
+  Calendar,
+  PieChart,
+  Wallet,
+  CreditCard as InvoiceIcon,
+  TrendingDown,
+  Star,
+  Cog,
+  Shield,
+  Globe
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -527,9 +535,22 @@ const getSidebarData = (userRole: string, managerPlatforms: string[] = []): Side
           allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
           requiredPlatforms: ['Bridge Retreats'],
           children: [
-            { title: "Revenue Tracking", icon: TrendingUp, href: "/bridge-retreats/finance/revenue", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
-            { title: "Expense Management", icon: Calculator, href: "/bridge-retreats/finance/expenses", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
-            { title: "Financial Reports", icon: FileText, href: "/bridge-retreats/finance/reports", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "Financial Dashboard", icon: BarChart3, href: "/bridge-retreats/finance/dashboard", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "Revenue Tracking", icon: TrendingUp, href: "/bridge-retreats/revenue", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "Expense Management", icon: Receipt, href: "/bridge-retreats/expenses", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "Invoicing", icon: InvoiceIcon, href: "/bridge-retreats/finance/invoices", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+          ],
+        },
+        {
+          title: "Reports & Analytics",
+          icon: FileText,
+          allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
+          requiredPlatforms: ['Bridge Retreats'],
+          children: [
+            { title: "Occupancy Reports", icon: Users, href: "/bridge-retreats/reports/occupancy", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "Revenue Reports", icon: DollarSign, href: "/bridge-retreats/reports/revenue", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "Guest Satisfaction", icon: Star, href: "/bridge-retreats/reports/satisfaction", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "Operational Reports", icon: Cog, href: "/bridge-retreats/reports/operations", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
           ],
         },
         {
@@ -541,6 +562,18 @@ const getSidebarData = (userRole: string, managerPlatforms: string[] = []): Side
             { title: "Housekeeping", icon: Settings, href: "/bridge-retreats/operations/housekeeping", allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'], requiredPlatforms: ['Bridge Retreats'] },
             { title: "Maintenance", icon: Settings, href: "/bridge-retreats/operations/maintenance", allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'MANAGER'], requiredPlatforms: ['Bridge Retreats'] },
             { title: "Staff Management", icon: Users, href: "/bridge-retreats/operations/staff", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+          ],
+        },
+        {
+          title: "Settings & Administration",
+          icon: Shield,
+          allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
+          requiredPlatforms: ['Bridge Retreats'],
+          children: [
+            { title: "System Settings", icon: Settings, href: "/bridge-retreats/settings", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "User Management", icon: Users, href: "/bridge-retreats/users", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "Rate Management", icon: DollarSign, href: "/bridge-retreats/settings/rates", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
+            { title: "Integration Settings", icon: Globe, href: "/bridge-retreats/settings/integrations", allowedRoles: ['SUPER_ADMIN', 'ADMIN'], requiredPlatforms: ['Bridge Retreats'] },
           ],
         },
       ],

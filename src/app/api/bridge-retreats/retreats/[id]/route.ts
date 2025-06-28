@@ -73,6 +73,7 @@ export async function PUT(
       title,
       description,
       type,
+      customTypeName,
       duration,
       capacity,
       price,
@@ -104,13 +105,17 @@ export async function PUT(
       );
     }
 
+    // Handle custom types
+    const finalType = customTypeName ? 'CUSTOM' : type;
+    
     // Update retreat with activities
     const retreat = await prisma.retreat.update({
       where: { id },
       data: {
         title,
         description,
-        type,
+        type: finalType,
+        customTypeName,
         duration: duration ? parseInt(duration) : undefined,
         capacity: capacity ? parseInt(capacity) : undefined,
         price: price ? parseFloat(price) : undefined,
@@ -208,3 +213,6 @@ export async function DELETE(
     );
   }
 } 
+ 
+ 
+ 

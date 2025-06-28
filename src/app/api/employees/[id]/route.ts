@@ -125,6 +125,8 @@ export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (
     const employeeWithCompany = {
       ...employee,
       role: employee.position, // Map position to role for frontend
+      position: employee.position.includes(',') ? employee.position.split(',').map(s => s.trim()) : employee.position, // Convert comma-separated to array
+      department: employee.department.includes(',') ? employee.department.split(',').map(s => s.trim()) : employee.department, // Convert comma-separated to array
       companyName: employee.company.name,
       actualCompanyName: employee.actualCompany?.name,
     };
@@ -269,6 +271,8 @@ export const PUT = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (
     const employeeWithCompany = {
       ...employee,
       role: employee.position, // Map position to role for frontend
+      position: employee.position.includes(',') ? employee.position.split(',').map(s => s.trim()) : employee.position, // Convert comma-separated to array
+      department: employee.department.includes(',') ? employee.department.split(',').map(s => s.trim()) : employee.department, // Convert comma-separated to array
       companyName: employee.company.name,
       actualCompanyName: employee.actualCompany?.name || null,
     };

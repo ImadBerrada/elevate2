@@ -73,8 +73,29 @@ export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (request:
     if (request.user!.role === 'SUPER_ADMIN') {
       // Super admins can see all employees
     } else if (request.user!.role === 'ADMIN') {
-      // Admins can see employees from their companies
-      where.userId = request.user!.userId;
+      // Admins can see employees from companies they own
+      const userCompanies = await prisma.company.findMany({
+        where: { userId: request.user!.userId },
+        select: { id: true }
+      });
+      const companyIds = userCompanies.map(c => c.id);
+      
+      if (companyIds.length === 0) {
+        // Admin has no companies, return empty result
+        return NextResponse.json({
+          employees: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            pages: 0,
+          },
+        });
+      }
+      
+      where.companyId = {
+        in: companyIds,
+      };
     } else if (request.user!.role === 'MANAGER') {
       // Managers can only see employees from their assigned companies
       const assignedCompanyIds = await getManagerAssignedCompanyIds(request.user!.userId);
@@ -161,6 +182,8 @@ export const GET = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (request:
     const employeesWithCompany = employees.map(employee => ({
       ...employee,
       role: employee.position, // Map position to role for frontend
+      position: employee.position.includes(',') ? employee.position.split(',').map(s => s.trim()) : employee.position, // Convert comma-separated to array
+      department: employee.department.includes(',') ? employee.department.split(',').map(s => s.trim()) : employee.department, // Convert comma-separated to array
       companyName: employee.company.name,
       actualCompanyName: employee.actualCompany?.name || null,
     }));
@@ -334,6 +357,8 @@ export const POST = withRole(['ADMIN', 'SUPER_ADMIN', 'MANAGER'])(async (request
     const employeeWithCompany = {
       ...employee,
       role: employee.position, // Map position to role for frontend
+      position: employee.position.includes(',') ? employee.position.split(',').map(s => s.trim()) : employee.position, // Convert comma-separated to array
+      department: employee.department.includes(',') ? employee.department.split(',').map(s => s.trim()) : employee.department, // Convert comma-separated to array
       companyName: employee.company.name,
       actualCompanyName: employee.actualCompany?.name || null,
     };

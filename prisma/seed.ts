@@ -1017,7 +1017,1060 @@ async function main() {
   console.log('Viewer: viewer@elevate.com / viewer123');
 }
 
+async function seedRetreatGuests() {
+  console.log('Seeding retreat guests...');
+
+  // Create sample retreats first
+  const retreat1 = await prisma.retreat.upsert({
+    where: { id: 'retreat-1' },
+    update: {},
+    create: {
+      id: 'retreat-1',
+      title: 'Mindfulness & Meditation Retreat',
+      description: 'A transformative 7-day journey into mindfulness and meditation practices.',
+      type: 'WELLNESS',
+      duration: 7,
+      capacity: 20,
+      instructor: 'Master Li Wei',
+      startDate: new Date('2024-06-15'),
+      endDate: new Date('2024-06-22'),
+      location: 'Serenity Valley Resort, Bali',
+      price: 1200,
+      amenities: ['Meditation Hall', 'Yoga Studio', 'Spa', 'Organic Garden'],
+      requirements: ['Basic meditation experience', 'Comfortable clothing'],
+      inclusions: ['Accommodation', 'All meals', 'Guided sessions', 'Materials'],
+      exclusions: ['Travel insurance', 'Personal expenses', 'Spa treatments'],
+      images: [],
+    },
+  });
+
+  const retreat2 = await prisma.retreat.upsert({
+    where: { id: 'retreat-2' },
+    update: {},
+    create: {
+      id: 'retreat-2',
+      title: 'Digital Detox & Nature Immersion',
+      description: 'Disconnect from technology and reconnect with nature in this 5-day retreat.',
+      type: 'WELLNESS',
+      duration: 5,
+      capacity: 15,
+      instructor: 'Sarah Mountain',
+      startDate: new Date('2024-07-10'),
+      endDate: new Date('2024-07-15'),
+      location: 'Mountain View Lodge, Colorado',
+      price: 800,
+      amenities: ['Hiking Trails', 'Mountain Views', 'Fire Pit', 'Library'],
+      requirements: ['Good physical condition', 'Hiking boots'],
+      inclusions: ['Accommodation', 'All meals', 'Guided hikes', 'Digital lockbox'],
+      exclusions: ['Travel insurance', 'Personal gear', 'Laundry'],
+      images: [],
+    },
+  });
+
+  // Create sample guests
+  const guest1 = await prisma.retreatGuest.upsert({
+    where: { email: 'sarah.johnson@email.com' },
+    update: {},
+    create: {
+      firstName: 'Sarah',
+      lastName: 'Johnson',
+      email: 'sarah.johnson@email.com',
+      phone: '+1-555-0123',
+      dateOfBirth: new Date('1985-03-15'),
+      nationality: 'USA',
+      passportNumber: 'US123456789',
+      gender: 'Female',
+      status: 'VIP',
+      
+      // Address
+      addressStreet: '123 Main Street',
+      addressCity: 'New York',
+      addressState: 'NY',
+      addressCountry: 'USA',
+      addressPostalCode: '10001',
+      
+      // Emergency Contact
+      emergencyContactName: 'John Johnson',
+      emergencyContactPhone: '+1-555-0124',
+      emergencyContactEmail: 'john.johnson@email.com',
+      emergencyContactRelation: 'Spouse',
+      
+      // Preferences
+      dietaryRestrictions: ['Vegetarian', 'Gluten-free'],
+      roomTypePreference: 'Deluxe',
+      bedTypePreference: 'Queen',
+      smokingPreference: 'Non-smoking',
+      specialRequests: ['Late check-out', 'Ground floor room'],
+      
+      // Medical Information
+      medicalConditions: [],
+      allergies: ['Peanuts'],
+      medications: ['Vitamin D'],
+      
+      // Loyalty Program
+      loyaltyPoints: 2500,
+      loyaltyTier: 'GOLD',
+      loyaltyProgramActive: true,
+      marketingConsent: true,
+      
+      // Profile
+      notes: 'VIP guest, prefers quiet rooms away from elevators.',
+    },
+  });
+
+  const guest2 = await prisma.retreatGuest.upsert({
+    where: { email: 'ahmed.rashid@email.com' },
+    update: {},
+    create: {
+      firstName: 'Ahmed',
+      lastName: 'Al-Rashid',
+      email: 'ahmed.rashid@email.com',
+      phone: '+971-50-123-4567',
+      dateOfBirth: new Date('1990-08-22'),
+      nationality: 'UAE',
+      passportNumber: 'AE987654321',
+      gender: 'Male',
+      status: 'ACTIVE',
+      
+      // Address
+      addressStreet: 'Al Wasl Road',
+      addressCity: 'Dubai',
+      addressState: 'Dubai',
+      addressCountry: 'UAE',
+      addressPostalCode: '12345',
+      
+      // Emergency Contact
+      emergencyContactName: 'Fatima Al-Rashid',
+      emergencyContactPhone: '+971-50-123-4568',
+      emergencyContactEmail: 'fatima.rashid@email.com',
+      emergencyContactRelation: 'Spouse',
+      
+      // Preferences
+      dietaryRestrictions: ['Halal'],
+      roomTypePreference: 'Standard',
+      bedTypePreference: 'King',
+      smokingPreference: 'Non-smoking',
+      specialRequests: ['Prayer mat', 'Qibla direction'],
+      
+      // Medical Information
+      medicalConditions: [],
+      allergies: [],
+      medications: [],
+      
+      // Loyalty Program
+      loyaltyPoints: 1200,
+      loyaltyTier: 'SILVER',
+      loyaltyProgramActive: true,
+      marketingConsent: true,
+      
+      // Profile
+      notes: 'Requires halal meals and prayer facilities.',
+    },
+  });
+
+  const guest3 = await prisma.retreatGuest.upsert({
+    where: { email: 'emma.wilson@email.com' },
+    update: {},
+    create: {
+      firstName: 'Emma',
+      lastName: 'Wilson',
+      email: 'emma.wilson@email.com',
+      phone: '+44-20-1234-5678',
+      dateOfBirth: new Date('1992-11-05'),
+      nationality: 'UK',
+      passportNumber: 'GB456789123',
+      gender: 'Female',
+      status: 'ACTIVE',
+      
+      // Address
+      addressStreet: '45 Baker Street',
+      addressCity: 'London',
+      addressState: 'England',
+      addressCountry: 'UK',
+      addressPostalCode: 'NW1 6XE',
+      
+      // Emergency Contact
+      emergencyContactName: 'Margaret Wilson',
+      emergencyContactPhone: '+44-20-1234-5679',
+      emergencyContactEmail: 'margaret.wilson@email.com',
+      emergencyContactRelation: 'Mother',
+      
+      // Preferences
+      dietaryRestrictions: ['Vegan'],
+      roomTypePreference: 'Suite',
+      bedTypePreference: 'Double',
+      smokingPreference: 'Non-smoking',
+      specialRequests: ['Yoga mat', 'Essential oils'],
+      
+      // Medical Information
+      medicalConditions: ['Asthma'],
+      allergies: ['Shellfish', 'Dust mites'],
+      medications: ['Inhaler', 'Antihistamines'],
+      
+      // Loyalty Program
+      loyaltyPoints: 800,
+      loyaltyTier: 'BRONZE',
+      loyaltyProgramActive: true,
+      marketingConsent: false,
+      
+      // Profile
+      notes: 'Yoga enthusiast, prefers rooms with good ventilation due to asthma.',
+    },
+  });
+
+  // Create sample bookings
+  const booking1 = await prisma.retreatBooking.upsert({
+    where: { id: 'booking-1' },
+    update: {},
+    create: {
+      id: 'booking-1',
+      retreatId: retreat1.id,
+      guestId: guest1.id,
+      checkInDate: new Date('2024-06-15T15:00:00Z'),
+      checkOutDate: new Date('2024-06-22T11:00:00Z'),
+      roomNumber: 'A101',
+      totalAmount: 1200,
+      paidAmount: 1200,
+      paymentStatus: 'PAID',
+      status: 'COMPLETED',
+      actualCheckInTime: new Date('2024-06-15T15:30:00Z'),
+      actualCheckOutTime: new Date('2024-06-22T10:45:00Z'),
+      checkInStaff: 'Reception Team',
+      checkOutStaff: 'Reception Team',
+      notes: 'VIP guest, provided welcome amenities.',
+    },
+  });
+
+  const booking2 = await prisma.retreatBooking.upsert({
+    where: { id: 'booking-2' },
+    update: {},
+    create: {
+      id: 'booking-2',
+      retreatId: retreat2.id,
+      guestId: guest2.id,
+      checkInDate: new Date('2024-07-10T15:00:00Z'),
+      checkOutDate: new Date('2024-07-15T11:00:00Z'),
+      roomNumber: 'B205',
+      totalAmount: 800,
+      paidAmount: 800,
+      paymentStatus: 'PAID',
+      status: 'CONFIRMED',
+      notes: 'Halal meals arranged, prayer mat provided.',
+    },
+  });
+
+  // Create sample reviews
+  await prisma.retreatReview.upsert({
+    where: { id: 'review-1' },
+    update: {},
+    create: {
+      id: 'review-1',
+      retreatId: retreat1.id,
+      guestId: guest1.id,
+      rating: 5,
+      title: 'Absolutely Transformative Experience',
+      comment: 'This retreat exceeded all my expectations. The meditation sessions were profound, the accommodation was luxurious, and the staff was incredibly attentive. I left feeling completely renewed and centered.',
+      serviceRating: 5,
+      facilitiesRating: 5,
+      foodRating: 4,
+      valueRating: 5,
+      wouldRecommend: true,
+      highlights: ['Excellent meditation guidance', 'Beautiful location', 'Outstanding service'],
+      issues: [],
+    },
+  });
+
+  await prisma.retreatReview.upsert({
+    where: { id: 'review-2' },
+    update: {},
+    create: {
+      id: 'review-2',
+      retreatId: retreat1.id,
+      guestId: guest3.id,
+      rating: 4,
+      title: 'Great Retreat with Minor Issues',
+      comment: 'Overall a wonderful experience. The yoga sessions were fantastic and the vegan meals were delicious. Only minor issue was some noise from the neighboring room.',
+      serviceRating: 4,
+      facilitiesRating: 4,
+      foodRating: 5,
+      valueRating: 4,
+      wouldRecommend: true,
+      highlights: ['Excellent vegan cuisine', 'Professional yoga instruction', 'Peaceful environment'],
+      issues: ['Some noise issues'],
+    },
+  });
+
+  // Create loyalty transactions
+  await prisma.retreatLoyaltyTransaction.upsert({
+    where: { id: 'loyalty-1' },
+    update: {},
+    create: {
+      id: 'loyalty-1',
+      guestId: guest1.id,
+      type: 'EARNED',
+      points: 120,
+      description: 'Stay completed - Mindfulness & Meditation Retreat',
+      bookingId: booking1.id,
+    },
+  });
+
+  await prisma.retreatLoyaltyTransaction.upsert({
+    where: { id: 'loyalty-2' },
+    update: {},
+    create: {
+      id: 'loyalty-2',
+      guestId: guest1.id,
+      type: 'EARNED',
+      points: 50,
+      description: 'Review bonus - Thank you for your feedback!',
+      bookingId: booking1.id,
+    },
+  });
+
+  // Create guest communications
+  await prisma.retreatGuestCommunication.upsert({
+    where: { id: 'comm-1' },
+    update: {},
+    create: {
+      id: 'comm-1',
+      guestId: guest1.id,
+      type: 'BOOKING_RELATED',
+      subject: 'Welcome to Your Retreat',
+      message: 'We are excited to welcome you to our Mindfulness & Meditation Retreat. Please find your booking confirmation and pre-arrival information attached.',
+      direction: 'OUTBOUND',
+      channel: 'email',
+      staffMember: 'Guest Services',
+      bookingId: booking1.id,
+    },
+  });
+
+  await prisma.retreatGuestCommunication.upsert({
+    where: { id: 'comm-2' },
+    update: {},
+    create: {
+      id: 'comm-2',
+      guestId: guest2.id,
+      type: 'INQUIRY',
+      subject: 'Halal Meal Options',
+      message: 'I would like to confirm that halal meal options will be available during my stay.',
+      direction: 'INBOUND',
+      channel: 'email',
+      staffMember: 'Guest Services',
+      bookingId: booking2.id,
+    },
+  });
+
+  console.log('Retreat guests seeded successfully!');
+}
+
+async function seedFacilities() {
+  console.log('🏢 Seeding facilities...');
+
+  // Create sample facilities
+  const mainLodge = await prisma.retreatFacility.upsert({
+    where: { id: 'facility-1' },
+    update: {},
+    create: {
+      id: 'facility-1',
+      name: 'Mountain View Lodge',
+      type: 'ACCOMMODATION',
+      status: 'OPERATIONAL',
+      capacity: 50,
+      currentOccupancy: 32,
+      location: 'North Wing',
+      description: 'Our premier accommodation facility featuring luxury suites and standard rooms with breathtaking mountain views.',
+      manager: 'Sarah Mitchell',
+      image: '/images/facilities/mountain-lodge.jpg',
+      lastMaintenance: new Date('2024-05-15'),
+      nextMaintenance: new Date('2024-08-15'),
+      rating: 4.8,
+      totalReviews: 124,
+      issueCount: 2,
+      operatingHours: '24/7',
+      temperature: 22.5,
+      hasWifi: true,
+      hasParking: true,
+      parkingSpots: 25,
+    },
+  });
+
+  const wellnessCenter = await prisma.retreatFacility.upsert({
+    where: { id: 'facility-2' },
+    update: {},
+    create: {
+      id: 'facility-2',
+      name: 'Serenity Wellness Center',
+      type: 'WELLNESS',
+      status: 'OPERATIONAL',
+      capacity: 30,
+      currentOccupancy: 18,
+      location: 'Central Building',
+      description: 'State-of-the-art wellness facility with spa treatments, massage therapy, and holistic healing services.',
+      manager: 'Dr. James Chen',
+      image: '/images/facilities/wellness-center.jpg',
+      lastMaintenance: new Date('2024-06-01'),
+      nextMaintenance: new Date('2024-09-01'),
+      rating: 4.9,
+      totalReviews: 89,
+      issueCount: 0,
+      operatingHours: '6:00 AM - 10:00 PM',
+      temperature: 24.0,
+      hasWifi: true,
+      hasParking: false,
+    },
+  });
+
+  const diningHall = await prisma.retreatFacility.upsert({
+    where: { id: 'facility-3' },
+    update: {},
+    create: {
+      id: 'facility-3',
+      name: 'Harmony Dining Hall',
+      type: 'DINING',
+      status: 'OPERATIONAL',
+      capacity: 80,
+      currentOccupancy: 45,
+      location: 'South Wing',
+      description: 'Spacious dining facility serving organic, locally-sourced meals with options for all dietary requirements.',
+      manager: 'Chef Maria Rodriguez',
+      image: '/images/facilities/dining-hall.jpg',
+      lastMaintenance: new Date('2024-06-10'),
+      nextMaintenance: new Date('2024-09-10'),
+      rating: 4.7,
+      totalReviews: 156,
+      issueCount: 1,
+      operatingHours: '6:30 AM - 9:30 PM',
+      temperature: 21.0,
+      hasWifi: true,
+      hasParking: false,
+    },
+  });
+
+  const conferenceCenter = await prisma.retreatFacility.upsert({
+    where: { id: 'facility-4' },
+    update: {},
+    create: {
+      id: 'facility-4',
+      name: 'Tranquil Conference Center',
+      type: 'CONFERENCE',
+      status: 'OPERATIONAL',
+      capacity: 100,
+      currentOccupancy: 0,
+      location: 'East Wing',
+      description: 'Modern conference facility with advanced AV equipment, perfect for workshops, seminars, and corporate retreats.',
+      manager: 'Michael Thompson',
+      image: '/images/facilities/conference-center.jpg',
+      lastMaintenance: new Date('2024-05-20'),
+      nextMaintenance: new Date('2024-08-20'),
+      rating: 4.6,
+      totalReviews: 67,
+      issueCount: 3,
+      operatingHours: '8:00 AM - 8:00 PM',
+      temperature: 23.0,
+      hasWifi: true,
+      hasParking: true,
+      parkingSpots: 40,
+    },
+  });
+
+  const recreationCenter = await prisma.retreatFacility.upsert({
+    where: { id: 'facility-5' },
+    update: {},
+    create: {
+      id: 'facility-5',
+      name: 'Adventure Recreation Center',
+      type: 'RECREATION',
+      status: 'OPERATIONAL',
+      capacity: 60,
+      currentOccupancy: 22,
+      location: 'West Wing',
+      description: 'Comprehensive recreation facility with fitness equipment, yoga studios, and activity spaces for group exercises.',
+      manager: 'Lisa Park',
+      image: '/images/facilities/recreation-center.jpg',
+      lastMaintenance: new Date('2024-06-05'),
+      nextMaintenance: new Date('2024-09-05'),
+      rating: 4.5,
+      totalReviews: 98,
+      issueCount: 1,
+      operatingHours: '5:00 AM - 11:00 PM',
+      temperature: 20.0,
+      hasWifi: true,
+      hasParking: true,
+      parkingSpots: 15,
+    },
+  });
+
+  // Create sample rooms
+  const rooms = [
+    {
+      id: 'room-1',
+      facilityId: mainLodge.id,
+      roomNumber: 'A101',
+      roomType: 'Deluxe Suite',
+      status: 'OCCUPIED' as const,
+      capacity: 2,
+      currentOccupancy: 2,
+      bedType: 'King',
+      hasPrivateBath: true,
+      hasBalcony: true,
+      hasAC: true,
+      hasWifi: true,
+      cleaningStatus: 'CLEAN' as const,
+      assignedHousekeeper: 'Maria Santos',
+    },
+    {
+      id: 'room-2',
+      facilityId: mainLodge.id,
+      roomNumber: 'A102',
+      roomType: 'Standard Room',
+      status: 'AVAILABLE' as const,
+      capacity: 2,
+      currentOccupancy: 0,
+      bedType: 'Queen',
+      hasPrivateBath: true,
+      hasBalcony: false,
+      hasAC: true,
+      hasWifi: true,
+      cleaningStatus: 'CLEAN' as const,
+      assignedHousekeeper: 'Maria Santos',
+    },
+    {
+      id: 'room-3',
+      facilityId: mainLodge.id,
+      roomNumber: 'B201',
+      roomType: 'Premium Suite',
+      status: 'MAINTENANCE' as const,
+      capacity: 4,
+      currentOccupancy: 0,
+      bedType: 'King + Sofa Bed',
+      hasPrivateBath: true,
+      hasBalcony: true,
+      hasAC: true,
+      hasWifi: true,
+      cleaningStatus: 'DIRTY' as const,
+      assignedHousekeeper: 'Elena Rodriguez',
+      maintenanceNotes: 'AC unit needs repair',
+    },
+  ];
+
+  for (const room of rooms) {
+    await prisma.facilityRoom.upsert({
+      where: { id: room.id },
+      update: {},
+      create: room,
+    });
+  }
+
+  // Create sample amenities
+  const amenities = [
+    {
+      id: 'amenity-1',
+      facilityId: wellnessCenter.id,
+      name: 'Meditation Garden',
+      category: 'WELLNESS' as const,
+      status: 'AVAILABLE' as const,
+      capacity: 20,
+      currentUsage: 8,
+      coordinator: 'Zen Master Liu',
+      operatingHours: '6:00 AM - 8:00 PM',
+      equipmentCount: 25,
+      availableEquipment: 20,
+      rating: 4.9,
+      totalReviews: 45,
+      issueCount: 0,
+      description: 'Peaceful outdoor meditation space surrounded by native plants and flowing water features.',
+      features: ['Outdoor seating', 'Water features', 'Sound system', 'Weather protection'],
+      image: '/images/amenities/meditation-garden.jpg',
+    },
+    {
+      id: 'amenity-2',
+      facilityId: wellnessCenter.id,
+      name: 'Thermal Spa',
+      category: 'SPA' as const,
+      status: 'AVAILABLE' as const,
+      capacity: 12,
+      currentUsage: 6,
+      coordinator: 'Spa Director Anna',
+      operatingHours: '8:00 AM - 9:00 PM',
+      equipmentCount: 8,
+      availableEquipment: 8,
+      rating: 4.8,
+      totalReviews: 67,
+      issueCount: 0,
+      description: 'Luxurious thermal spa with hot springs, saunas, and relaxation pools.',
+      features: ['Hot springs', 'Sauna', 'Steam room', 'Relaxation pool', 'Changing rooms'],
+      image: '/images/amenities/thermal-spa.jpg',
+    },
+    {
+      id: 'amenity-3',
+      facilityId: recreationCenter.id,
+      name: 'Yoga Studio',
+      category: 'FITNESS' as const,
+      status: 'OCCUPIED' as const,
+      capacity: 25,
+      currentUsage: 18,
+      coordinator: 'Yoga Instructor Sarah',
+      operatingHours: '5:00 AM - 10:00 PM',
+      equipmentCount: 30,
+      availableEquipment: 12,
+      rating: 4.7,
+      totalReviews: 89,
+      issueCount: 1,
+      description: 'Spacious yoga studio with natural lighting and premium equipment for all levels.',
+      features: ['Mirrors', 'Sound system', 'Props storage', 'Air conditioning', 'Natural lighting'],
+      image: '/images/amenities/yoga-studio.jpg',
+    },
+  ];
+
+  for (const amenity of amenities) {
+    await prisma.facilityAmenity.upsert({
+      where: { id: amenity.id },
+      update: {},
+      create: amenity,
+    });
+  }
+
+  // Create sample equipment
+  const equipment = [
+    {
+      id: 'equipment-1',
+      amenityId: 'amenity-1',
+      name: 'Meditation Cushions',
+      quantity: 20,
+      condition: 'GOOD' as const,
+      lastService: new Date('2024-05-01'),
+      nextService: new Date('2024-08-01'),
+      notes: 'Regular cleaning and replacement of covers',
+    },
+    {
+      id: 'equipment-2',
+      amenityId: 'amenity-3',
+      name: 'Yoga Mats',
+      quantity: 25,
+      condition: 'EXCELLENT' as const,
+      lastService: new Date('2024-06-01'),
+      nextService: new Date('2024-09-01'),
+      notes: 'Premium eco-friendly mats',
+    },
+    {
+      id: 'equipment-3',
+      amenityId: 'amenity-3',
+      name: 'Yoga Blocks',
+      quantity: 30,
+      condition: 'GOOD' as const,
+      lastService: new Date('2024-05-15'),
+      nextService: new Date('2024-08-15'),
+      notes: 'Cork blocks, some showing wear',
+    },
+  ];
+
+  for (const item of equipment) {
+    await prisma.amenityEquipment.upsert({
+      where: { id: item.id },
+      update: {},
+      create: item,
+    });
+  }
+
+  // Create sample maintenance requests
+  const maintenanceRequests = [
+    {
+      id: 'maintenance-1',
+      facilityId: mainLodge.id,
+      title: 'AC Unit Repair - Room B201',
+      description: 'Air conditioning unit in room B201 is not cooling properly. Guests reported warm temperatures.',
+      priority: 'HIGH' as const,
+      status: 'IN_PROGRESS' as const,
+      category: 'HVAC' as const,
+      assignedTo: 'HVAC Technician Mike',
+      reportedBy: 'Housekeeping Staff',
+      requestDate: new Date('2024-06-15'),
+      scheduledDate: new Date('2024-06-16'),
+      estimatedCost: 250,
+      vendor: 'Cool Air Services',
+      notes: 'Refrigerant leak suspected',
+      images: ['/images/maintenance/ac-unit-b201.jpg'],
+      documents: [],
+    },
+    {
+      id: 'maintenance-2',
+      facilityId: diningHall.id,
+      title: 'Kitchen Equipment Service',
+      description: 'Monthly preventive maintenance for commercial kitchen equipment',
+      priority: 'MEDIUM' as const,
+      status: 'SCHEDULED' as const,
+      category: 'EQUIPMENT' as const,
+      assignedTo: 'Kitchen Services Inc',
+      reportedBy: 'Chef Maria Rodriguez',
+      requestDate: new Date('2024-06-10'),
+      scheduledDate: new Date('2024-06-20'),
+      estimatedCost: 400,
+      vendor: 'Kitchen Services Inc',
+      notes: 'Regular maintenance schedule',
+      images: [],
+      documents: ['/docs/maintenance-schedule.pdf'],
+    },
+    {
+      id: 'maintenance-3',
+      facilityId: conferenceCenter.id,
+      title: 'Projector Replacement',
+      description: 'Main conference room projector bulb needs replacement',
+      priority: 'LOW' as const,
+      status: 'PENDING' as const,
+      category: 'EQUIPMENT' as const,
+      reportedBy: 'AV Technician',
+      requestDate: new Date('2024-06-12'),
+      estimatedCost: 150,
+      notes: 'Backup projector available',
+      images: [],
+      documents: [],
+    },
+  ];
+
+  for (const request of maintenanceRequests) {
+    await prisma.facilityMaintenanceRequest.upsert({
+      where: { id: request.id },
+      update: {},
+      create: request,
+    });
+  }
+
+  // Create sample facility bookings
+  const facilityBookings = [
+    {
+      id: 'facility-booking-1',
+      facilityId: conferenceCenter.id,
+      eventName: 'Corporate Leadership Workshop',
+      eventType: 'WORKSHOP' as const,
+      organizer: 'TechCorp Inc.',
+      contactEmail: 'events@techcorp.com',
+      contactPhone: '+1-555-0123',
+      startDate: new Date('2024-07-15'),
+      endDate: new Date('2024-07-17'),
+      startTime: '9:00 AM',
+      endTime: '5:00 PM',
+      attendees: 45,
+      status: 'CONFIRMED' as const,
+      setupRequirements: ['Theater seating', 'Podium', 'Microphone system', 'Projection screen'],
+      specialRequests: 'Need vegetarian lunch options for 15 attendees',
+      catering: true,
+      audioVisual: true,
+      parking: 45,
+      totalCost: 2500,
+      coordinator: 'Event Coordinator Jane',
+      notes: ['Confirmed catering for 45 people', 'AV equipment tested'],
+      confirmationSent: true,
+    },
+    {
+      id: 'facility-booking-2',
+      facilityId: wellnessCenter.id,
+      eventName: 'Mindfulness Meditation Retreat',
+      eventType: 'RETREAT' as const,
+      organizer: 'Zen Wellness Group',
+      contactEmail: 'bookings@zengroup.com',
+      contactPhone: '+1-555-0456',
+      startDate: new Date('2024-08-01'),
+      endDate: new Date('2024-08-05'),
+      startTime: '6:00 AM',
+      endTime: '8:00 PM',
+      attendees: 25,
+      status: 'PENDING' as const,
+      setupRequirements: ['Meditation cushions', 'Sound system', 'Ambient lighting'],
+      specialRequests: 'Quiet environment essential, no construction noise',
+      catering: false,
+      audioVisual: false,
+      parking: 25,
+      totalCost: 1800,
+      coordinator: 'Wellness Coordinator Mark',
+      notes: ['Pending final headcount confirmation'],
+      confirmationSent: false,
+    },
+  ];
+
+  for (const booking of facilityBookings) {
+    await prisma.facilityBooking.upsert({
+      where: { id: booking.id },
+      update: {},
+      create: booking,
+    });
+  }
+
+  // Create sample amenity bookings
+  const amenityBookings = [
+    {
+      id: 'amenity-booking-1',
+      amenityId: 'amenity-2',
+      guestName: 'John Smith',
+      guestContact: 'john.smith@email.com',
+      bookingType: 'Thermal Spa Session',
+      startTime: new Date('2024-06-20T14:00:00Z'),
+      endTime: new Date('2024-06-20T16:00:00Z'),
+      duration: 120,
+      status: 'CONFIRMED' as const,
+      notes: 'First-time spa visitor, provide orientation',
+    },
+    {
+      id: 'amenity-booking-2',
+      amenityId: 'amenity-3',
+      guestName: 'Sarah Johnson',
+      guestContact: 'sarah.j@email.com',
+      bookingType: 'Private Yoga Session',
+      startTime: new Date('2024-06-21T07:00:00Z'),
+      endTime: new Date('2024-06-21T08:00:00Z'),
+      duration: 60,
+      status: 'CONFIRMED' as const,
+      notes: 'Advanced practitioner, focus on strength poses',
+    },
+  ];
+
+  for (const booking of amenityBookings) {
+    await prisma.amenityBooking.upsert({
+      where: { id: booking.id },
+      update: {},
+      create: booking,
+    });
+  }
+
+  console.log('Facilities seeded successfully!');
+}
+
+async function seedBridgeRetreats(prisma: PrismaClient) {
+  console.log('🏔️ Seeding Bridge Retreats data...');
+
+  // Create facilities
+  const facility1 = await prisma.retreatFacility.create({
+    data: {
+      name: 'Mountain View Lodge',
+      type: 'ACCOMMODATION',
+      status: 'OPERATIONAL',
+      capacity: 50,
+      currentOccupancy: 25,
+      location: 'Blue Ridge Mountains, NC',
+      description: 'A serene mountain lodge with panoramic views',
+      manager: 'Sarah Johnson',
+      operatingHours: '24/7',
+      hasWifi: true,
+      hasParking: true,
+      parkingSpots: 30,
+      rating: 4.5,
+      totalReviews: 125
+    }
+  });
+
+  const facility2 = await prisma.retreatFacility.create({
+    data: {
+      name: 'Wellness Center',
+      type: 'WELLNESS',
+      status: 'OPERATIONAL',
+      capacity: 30,
+      currentOccupancy: 15,
+      location: 'Sedona, AZ',
+      description: 'Modern wellness facility with spa services',
+      manager: 'Dr. Michael Chen',
+      operatingHours: '6:00 AM - 10:00 PM',
+      hasWifi: true,
+      hasParking: true,
+      parkingSpots: 20,
+      rating: 4.8,
+      totalReviews: 89
+    }
+  });
+
+  // Create rooms
+  const rooms = [];
+  for (let i = 1; i <= 10; i++) {
+    const room = await prisma.facilityRoom.create({
+      data: {
+        facilityId: facility1.id,
+        roomNumber: `${Math.floor(i/6) + 1}0${i % 10}`,
+        roomType: i <= 6 ? 'Standard' : 'Premium',
+        status: ['AVAILABLE', 'OCCUPIED'][Math.floor(Math.random() * 2)] as any,
+        capacity: i <= 6 ? 2 : 4,
+        currentOccupancy: Math.floor(Math.random() * 2),
+        bedType: i <= 6 ? 'Queen' : 'King',
+        hasPrivateBath: true,
+        hasBalcony: i > 6,
+        hasAC: true,
+        hasWifi: true,
+        cleaningStatus: ['CLEAN', 'DIRTY', 'IN_PROGRESS'][Math.floor(Math.random() * 3)] as any,
+        lastCleaned: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000),
+        assignedHousekeeper: ['Maria Rodriguez', 'John Smith', 'Lisa Chen'][Math.floor(Math.random() * 3)]
+      }
+    });
+    rooms.push(room);
+  }
+
+  // Create retreats
+  const retreat1 = await prisma.retreat.create({
+    data: {
+      title: 'Mindfulness & Meditation Retreat',
+      description: 'A transformative 5-day journey into mindfulness and inner peace',
+      type: 'WELLNESS',
+      status: 'ACTIVE',
+      duration: 5,
+      startDate: new Date('2024-02-15'),
+      endDate: new Date('2024-02-20'),
+      location: 'Blue Ridge Mountains, NC',
+      capacity: 20,
+      price: 1299.99,
+      instructor: 'Dr. Sarah Williams',
+      amenities: ['Guided Meditation', 'Yoga Sessions', 'Nature Walks', 'Healthy Meals'],
+      inclusions: ['Accommodation', 'All Meals', 'Workshop Materials', 'Certificate'],
+      requirements: ['Basic fitness level', 'Open mind', 'Comfortable clothing'],
+      exclusions: ['Personal expenses', 'Travel to location'],
+      cancellationPolicy: 'Full refund 30 days before, 50% refund 14 days before',
+      images: []
+    }
+  });
+
+  const retreat2 = await prisma.retreat.create({
+    data: {
+      title: 'Corporate Leadership Intensive',
+      description: 'Executive leadership development program',
+      type: 'CORPORATE',
+      status: 'ACTIVE',
+      duration: 3,
+      startDate: new Date('2024-03-01'),
+      endDate: new Date('2024-03-03'),
+      location: 'Sedona, AZ',
+      capacity: 15,
+      price: 2499.99,
+      instructor: 'Michael Thompson',
+      amenities: ['Leadership Workshops', 'Team Building', 'Strategic Planning', 'Executive Coaching'],
+      inclusions: ['Accommodation', 'All Meals', 'Materials', 'Follow-up Session'],
+      requirements: ['Management experience', 'Business attire', 'Laptop'],
+      exclusions: ['Travel expenses', 'Personal meals'],
+      cancellationPolicy: 'Company policy applies',
+      images: []
+    }
+  });
+
+  // Create guests
+  const guests = [];
+  const firstNames = ['John', 'Sarah', 'Michael', 'Emily', 'David', 'Lisa', 'Robert', 'Jennifer'];
+  const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis'];
+  
+  for (let i = 0; i < 20; i++) {
+    const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+    const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+    
+    const guest = await prisma.retreatGuest.create({
+      data: {
+        firstName,
+        lastName,
+        email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@email.com`,
+        phone: `+1-555-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+        dateOfBirth: new Date(1970 + Math.floor(Math.random() * 35), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
+        nationality: ['American', 'Canadian', 'British', 'Australian'][Math.floor(Math.random() * 4)],
+        status: ['ACTIVE', 'VIP'][Math.floor(Math.random() * 2)] as any,
+        loyaltyTier: ['BRONZE', 'SILVER', 'GOLD'][Math.floor(Math.random() * 3)] as any,
+        loyaltyPoints: Math.floor(Math.random() * 1000),
+        addressStreet: `${Math.floor(Math.random() * 9999) + 1} Main St`,
+        addressCity: ['New York', 'Los Angeles', 'Chicago', 'Houston'][Math.floor(Math.random() * 4)],
+        addressCountry: 'USA',
+        emergencyContactName: `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`,
+        emergencyContactPhone: `+1-555-${String(Math.floor(Math.random() * 9000) + 1000)}`,
+        dietaryRestrictions: Math.random() > 0.7 ? ['Vegetarian'] : [],
+        medicalConditions: Math.random() > 0.8 ? ['None'] : [],
+        loyaltyProgramActive: true,
+        marketingConsent: Math.random() > 0.3
+      }
+    });
+    guests.push(guest);
+  }
+
+  // Create bookings
+  for (let i = 0; i < 15; i++) {
+    const guest = guests[Math.floor(Math.random() * guests.length)];
+    const retreat = Math.random() > 0.5 ? retreat1 : retreat2;
+    const room = rooms[Math.floor(Math.random() * rooms.length)];
+    
+    await prisma.retreatBooking.create({
+      data: {
+        retreatId: retreat.id,
+        guestId: guest.id,
+        status: ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'][Math.floor(Math.random() * 4)] as any,
+        checkInDate: new Date(retreat.startDate),
+        checkOutDate: new Date(retreat.endDate),
+        numberOfGuests: Math.floor(Math.random() * 3) + 1,
+        totalAmount: retreat.price,
+        paidAmount: Math.random() > 0.3 ? retreat.price : retreat.price * 0.5,
+        paymentMethod: ['Credit Card', 'Bank Transfer', 'PayPal'][Math.floor(Math.random() * 3)],
+        paymentStatus: ['PENDING', 'PARTIAL', 'PAID'][Math.floor(Math.random() * 3)] as any,
+        roomId: room.id,
+        roomNumber: room.roomNumber,
+        roomType: room.roomType,
+        specialRequests: Math.random() > 0.7 ? 'Ground floor room preferred' : null
+      }
+    });
+  }
+
+  // Create maintenance requests
+  for (let i = 0; i < 8; i++) {
+    const facility = Math.random() > 0.5 ? facility1 : facility2;
+    
+    await prisma.facilityMaintenanceRequest.create({
+      data: {
+        facilityId: facility.id,
+        title: ['Fix leaking faucet', 'Replace light bulbs', 'Repair AC unit', 'Paint touch-up', 'Fix door lock'][Math.floor(Math.random() * 5)],
+        description: 'Maintenance required as reported by housekeeping staff',
+        category: ['ELECTRICAL', 'PLUMBING', 'HVAC', 'OTHER'][Math.floor(Math.random() * 4)] as any,
+        priority: ['LOW', 'MEDIUM', 'HIGH'][Math.floor(Math.random() * 3)] as any,
+        status: ['PENDING', 'IN_PROGRESS', 'COMPLETED'][Math.floor(Math.random() * 3)] as any,
+        reportedBy: 'Housekeeping Staff',
+        assignedTo: 'Maintenance Team',
+        estimatedCost: Math.floor(Math.random() * 500) + 50,
+        scheduledDate: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000)
+      }
+    });
+  }
+
+  // Create amenities
+  await prisma.facilityAmenity.create({
+    data: {
+      facilityId: facility1.id,
+      name: 'Meditation Garden',
+      category: 'RECREATION',
+      status: 'AVAILABLE',
+      capacity: 25,
+      currentUsage: 8,
+      coordinator: 'Sarah Johnson',
+      operatingHours: '6:00 AM - 9:00 PM',
+      equipmentCount: 25,
+      availableEquipment: 20,
+      rating: 4.7,
+      totalReviews: 45,
+      description: 'Peaceful outdoor meditation space',
+      features: ['Zen Garden', 'Water Feature', 'Cushions', 'Shade Structure']
+    }
+  });
+
+  await prisma.facilityAmenity.create({
+    data: {
+      facilityId: facility2.id,
+      name: 'Spa Treatment Rooms',
+      category: 'WELLNESS',
+      status: 'AVAILABLE',
+      capacity: 6,
+      currentUsage: 3,
+      coordinator: 'Dr. Michael Chen',
+      operatingHours: '8:00 AM - 8:00 PM',
+      equipmentCount: 12,
+      availableEquipment: 10,
+      rating: 4.9,
+      totalReviews: 67,
+      description: 'Professional spa treatment facilities',
+      features: ['Massage Tables', 'Aromatherapy', 'Sound System', 'Climate Control']
+    }
+  });
+
+  console.log('✅ Bridge Retreats data seeded successfully');
+}
+
 main()
+  .then(() => seedRetreatGuests())
+  .then(() => seedFacilities())
+  .then(() => seedBridgeRetreats(prisma))
   .catch((e) => {
     console.error('❌ Error during seeding:', e);
     process.exit(1);
